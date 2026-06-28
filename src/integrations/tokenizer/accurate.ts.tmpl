@@ -1,0 +1,10 @@
+import { encode } from "gpt-tokenizer";
+
+/**
+ * Exact OpenAI token count. Materialized from this template into
+ * `accurate.ts` by scripts/generate.mjs only when gpt-tokenizer is installed.
+ */
+export function countAccurate(text: string): number {
+  if (!text) return 0;
+  return encode(text).length;
+}

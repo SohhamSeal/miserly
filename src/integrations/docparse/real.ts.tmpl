@@ -1,0 +1,55 @@
+import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+
+// pdfjs-dist and mammoth are large and only needed when a document is actually
+// uploaded, so they are loaded lazily (dynamic import) to keep them out of the
+// initial bundle. The worker URL above is tiny (just a string) and is emitted
+// as a separate asset.
+let workerConfigured = false;
+
+async function loadPdfjs() {
+  const pdfjsLib = await import("pdfjs-dist");
+  if (!workerConfigured) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+    workerConfigured = true;
+  }
+  return pdfjsLib;
+}
+
+async function parsePdf(file: File): Promise<string> {
+  const pdfjsLib = await loadPdfjs();
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  const pages: string[] = [];
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const content = await page.getTextContent();
+    const text = content.items
+      .map((item) => ("str" in item ? item.str : ""))
+      .join(" ");
+    pages.push(text.replace(/[ \t]+/g, " ").trim());
+  }
+  return pages.join("\n\n");
+}
+
+async function parseDocx(file: File): Promise<string> {
+  const mammoth = await import("mammoth");
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  return result.value;
+}
+
+/**
+ * Extract text from a PDF or DOCX file. Materialized from this template into
+ * `real.ts` by scripts/generate.mjs only when pdfjs-dist + mammoth are present.
+ */
+export async function parseBinaryDocument(file: File): Promise<string> {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return parsePdf(file);
+  if (ext === "docx") return parseDocx(file);
+  if (ext === "doc") {
+    throw new Error(
+      "Legacy .doc files aren't supported — convert to .docx or paste the text.",
+    );
+  }
+  throw new Error(`Unsupported document type: .${ext}`);
+}
