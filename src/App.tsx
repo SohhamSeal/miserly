@@ -5,6 +5,7 @@ import { useStudioStore } from "@/store/useStudioStore";
 import { useFeatureEnabled, useSettingsStore } from "@/store/useSettingsStore";
 import { ThemeController } from "@/components/ThemeController";
 import { Header } from "@/components/Header";
+import { HistorySidebar } from "@/components/HistorySidebar";
 import { InputPanel } from "@/components/InputPanel";
 import { OptimizeBar } from "@/components/OptimizeBar";
 import { LiveProgress } from "@/components/LiveProgress";
@@ -79,54 +80,57 @@ export default function App() {
   return (
     <TooltipProvider delayDuration={200} skipDelayDuration={300}>
       <ThemeController />
-      <div className="min-h-full bg-grid">
-        <Header />
+      <div className="flex min-h-full">
+        <HistorySidebar />
+        <div className="flex min-h-full min-w-0 flex-1 flex-col bg-grid">
+          <Header />
 
-        <main className="mx-auto max-w-[1400px] space-y-5 px-4 py-6 sm:px-6">
-          <InputPanel />
-          <OptimizeBar />
+          <main className="mx-auto w-full max-w-[1400px] space-y-5 px-4 py-6 sm:px-6">
+            <InputPanel />
+            <OptimizeBar />
 
-          {showGuide ? <HowItWorks /> : null}
+            {showGuide ? <HowItWorks /> : null}
 
-          {status === "error" && error ? <ErrorBox message={error} /> : null}
+            {status === "error" && error ? <ErrorBox message={error} /> : null}
 
-          {status === "running" && !result ? (
-            <div className="mx-auto w-full max-w-2xl">
-              <LiveProgress />
-            </div>
-          ) : null}
-
-          {result ? (
-            <div className="space-y-5">
-              <div className="grid gap-5 xl:grid-cols-12">
-                <div className="xl:col-span-8">
-                  <OutputPanel />
-                </div>
-                <div className="xl:col-span-4">
-                  <LiveProgress />
-                </div>
+            {status === "running" && !result ? (
+              <div className="mx-auto w-full max-w-2xl">
+                <LiveProgress />
               </div>
+            ) : null}
 
-              <ReportCard />
-
-              {showCost || showBudget ? (
-                <div
-                  className={
-                    showCost && showBudget ? "grid gap-5 lg:grid-cols-2" : "grid gap-5"
-                  }
-                >
-                  {showCost ? <CostVisualization /> : null}
-                  {showBudget ? <ContextBudgetVisualization /> : null}
+            {result ? (
+              <div className="space-y-5">
+                <div className="grid gap-5 xl:grid-cols-12">
+                  <div className="xl:col-span-8">
+                    <OutputPanel />
+                  </div>
+                  <div className="xl:col-span-4">
+                    <LiveProgress />
+                  </div>
                 </div>
-              ) : null}
-            </div>
-          ) : null}
-        </main>
 
-        <footer className="mx-auto max-w-[1400px] px-4 pb-10 pt-4 text-center text-xs text-muted-foreground sm:px-6">
-          miserly runs entirely in your browser · token counts use a real tokenizer · costs are
-          estimates
-        </footer>
+                <ReportCard />
+
+                {showCost || showBudget ? (
+                  <div
+                    className={
+                      showCost && showBudget ? "grid gap-5 lg:grid-cols-2" : "grid gap-5"
+                    }
+                  >
+                    {showCost ? <CostVisualization /> : null}
+                    {showBudget ? <ContextBudgetVisualization /> : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </main>
+
+          <footer className="mx-auto w-full max-w-[1400px] px-4 pb-10 pt-4 text-center text-xs text-muted-foreground sm:px-6">
+            miserly runs entirely in your browser · token counts use a real tokenizer · costs are
+            estimates
+          </footer>
+        </div>
       </div>
     </TooltipProvider>
   );

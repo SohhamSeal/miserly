@@ -3,6 +3,13 @@ export { runOptimization } from "./runner";
 export { PLUGINS, getPlugin } from "./registry";
 export { classify, computeStats } from "./classifier";
 export { planPipeline } from "./planner";
+export { defaultAggressiveness } from "./plugins/_base";
+export {
+  estimateStageRatio,
+  stageRatio,
+  projectManualPipeline,
+} from "./preview";
+export type { PipelineProjection } from "./preview";
 export {
   MODELS,
   DEFAULT_MODEL_ID,

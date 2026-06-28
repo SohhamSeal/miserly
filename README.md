@@ -1,9 +1,17 @@
-# miserly
+<div align="center">
 
-**A frugal AI context optimization studio.** miserly compresses the context you
-send to an LLM — deduplicating, minifying, trimming and restructuring it — so you
-spend fewer tokens (and less money) without losing the signal. Everything runs
-**locally in your browser**; your text is never uploaded anywhere.
+<img src="src/assets/miserly-logo.png" alt="miserly" width="132" height="132" />
+
+<h1>miserly</h1>
+
+<p><strong>A frugal AI context optimization studio.</strong></p>
+
+</div>
+
+miserly compresses the context you send to an LLM — deduplicating, minifying,
+trimming and restructuring it — so you spend fewer tokens (and less money)
+without losing the signal. Everything runs **locally in your browser**; your text
+is never uploaded anywhere.
 
 > Paste a prompt, log dump, RAG bundle, JSON blob or transcript → miserly detects
 > what it is, plans a compression pipeline, runs it live, and shows you the

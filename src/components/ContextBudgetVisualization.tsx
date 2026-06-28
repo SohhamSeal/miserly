@@ -3,9 +3,9 @@ import { accent } from "@/lib/accent";
 import { formatNumber, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { BudgetSegment } from "@/engine";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tip } from "@/components/ui/tooltip";
-import { SectionTitle, SegmentBar } from "@/components/common";
+import { CollapsibleCard } from "@/components/CollapsibleCard";
+import { SegmentBar } from "@/components/common";
 
 function Allocation({
   title,
@@ -51,25 +51,29 @@ export function ContextBudgetVisualization() {
   const result = useStudioStore((s) => s.result);
   if (!result) return null;
 
+  const afterTotal = result.budgetAfter.reduce((a, s) => a + s.tokens, 0);
+
   return (
-    <Card>
-      <CardHeader>
-        <SectionTitle hint="Where your context budget goes before and after optimization — so you can see what was preserved.">
-          Context budget
-        </SectionTitle>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        <Allocation
-          title="Before"
-          segments={result.budgetBefore}
-          hint="How the original tokens split across detected content types."
-        />
-        <Allocation
-          title="After"
-          segments={result.budgetAfter}
-          hint="What kinds of information survived into the optimized output."
-        />
-      </CardContent>
-    </Card>
+    <CollapsibleCard
+      title="Context budget"
+      hint="Where your context budget goes before and after optimization — so you can see what was preserved."
+      summary={
+        <>
+          <span className="font-medium text-foreground">{formatNumber(afterTotal)}</span> tokens after
+        </>
+      }
+      contentClassName="space-y-5"
+    >
+      <Allocation
+        title="Before"
+        segments={result.budgetBefore}
+        hint="How the original tokens split across detected content types."
+      />
+      <Allocation
+        title="After"
+        segments={result.budgetAfter}
+        hint="What kinds of information survived into the optimized output."
+      />
+    </CollapsibleCard>
   );
 }

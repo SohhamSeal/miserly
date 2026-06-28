@@ -9,7 +9,6 @@ import {
   formatRatio,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tip } from "@/components/ui/tooltip";
 import {
@@ -19,7 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MetricTile, SectionTitle, TypeChip } from "@/components/common";
+import { CollapsibleCard } from "@/components/CollapsibleCard";
+import { MetricTile, TypeChip } from "@/components/common";
 
 function qualityRating(score: number): { label: string; cls: string } {
   if (score >= 0.95) return { label: "Excellent", cls: "text-success" };
@@ -46,44 +46,45 @@ export function ReportCard() {
   const { classification, validation, plan } = result;
 
   return (
-    <Card>
-      <CardHeader>
-        <SectionTitle
-          icon={<Coins className="h-4 w-4" />}
-          hint="A full breakdown of what miserly did and what it saves you. Switch the model to recompute costs instantly."
-          right={
-            <Tip
-              content={
-                <span>
-                  {model.label}: ${model.inputPerM}/1M in · ${model.outputPerM}/1M out ·{" "}
-                  {formatCompact(model.contextWindow)} context
-                </span>
-              }
-            >
-              <div className="w-[190px]">
-                <Select value={modelId} onValueChange={setModelId}>
-                  <SelectTrigger aria-label="Pricing model">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MODELS.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </Tip>
+    <CollapsibleCard
+      icon={<Coins className="h-4 w-4" />}
+      title="Optimization report"
+      hint="A full breakdown of what miserly did and what it saves you. Switch the model to recompute costs instantly."
+      summary={
+        <>
+          <span className="font-medium text-success">{formatPct(reductionPct)}</span> smaller · saves{" "}
+          <span className="font-medium text-success">{formatUSD(cost.saved)}</span>
+        </>
+      }
+      right={
+        <Tip
+          content={
+            <span>
+              {model.label}: ${model.inputPerM}/1M in · ${model.outputPerM}/1M out ·{" "}
+              {formatCompact(model.contextWindow)} context
+            </span>
           }
         >
-          Optimization report
-        </SectionTitle>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        {/* Detection summary */}
-        <Tip
+          <div className="w-[190px]">
+            <Select value={modelId} onValueChange={setModelId}>
+              <SelectTrigger aria-label="Pricing model">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MODELS.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </Tip>
+      }
+      contentClassName="space-y-4"
+    >
+      {/* Detection summary */}
+      <Tip
           content={`Detection reasons: ${classification.reasons.join(", ")}.`}
           side="bottom"
         >
@@ -200,7 +201,7 @@ export function ReportCard() {
 
         <div className="rounded-lg border border-border bg-secondary/30 p-3">
           <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Pipeline selected
+            {plan.mode === "manual" ? "Manual pipeline" : "Pipeline selected"}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             {plan.stages.map((stage, i) => (
@@ -232,7 +233,6 @@ export function ReportCard() {
             ))}
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

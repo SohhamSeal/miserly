@@ -3,9 +3,8 @@ import { useStudioStore } from "@/store/useStudioStore";
 import { compareCost, formatUSD, getModel } from "@/engine";
 import { formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tip } from "@/components/ui/tooltip";
-import { SectionTitle } from "@/components/common";
+import { CollapsibleCard } from "@/components/CollapsibleCard";
 
 function CostRow({
   label,
@@ -45,14 +44,17 @@ export function CostVisualization() {
   const afterPct = cost.beforeCost > 0 ? (cost.afterCost / cost.beforeCost) * 100 : 0;
 
   return (
-    <Card>
-      <CardHeader>
-        <SectionTitle hint={`Input-token cost at ${model.label} pricing. Updates instantly when you change the model.`}>
-          Cost comparison
-        </SectionTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-3">
+    <CollapsibleCard
+      title="Cost comparison"
+      hint={`Input-token cost at ${model.label} pricing. Updates instantly when you change the model.`}
+      summary={
+        <>
+          saves <span className="font-medium text-success">{formatUSD(cost.saved)}</span>
+        </>
+      }
+      contentClassName="space-y-4"
+    >
+      <div className="space-y-3">
           <CostRow
             label="Original cost"
             amount={formatUSD(cost.beforeCost)}
@@ -81,7 +83,6 @@ export function CostVisualization() {
             </div>
           </div>
         </Tip>
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

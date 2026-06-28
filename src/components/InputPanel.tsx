@@ -118,7 +118,7 @@ export function InputPanel() {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
       <div className="flex items-center justify-between gap-3 px-4 py-2.5">
         <SectionTitle hint="Paste anything: logs, code, JSON, Markdown, chat history. miserly detects the type automatically.">
           Input

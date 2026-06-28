@@ -7,6 +7,7 @@ import type { PhaseStatus, PipelinePhase, StageResult } from "@/engine";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { SectionTitle } from "@/components/common";
+import { PipelineBreakdown } from "@/components/PipelineBreakdown";
 
 function StatusIcon({ status }: { status: PhaseStatus }) {
   switch (status) {
@@ -89,6 +90,7 @@ export function LiveProgress() {
   const phases = useStudioStore((s) => s.phases);
   const liveStages = useStudioStore((s) => s.liveStages);
   const status = useStudioStore((s) => s.status);
+  const result = useStudioStore((s) => s.result);
   const animate = useAnimationsEnabled();
 
   if (status === "idle") return null;
@@ -164,6 +166,8 @@ export function LiveProgress() {
             {formatMs(liveStages.reduce((a, s) => a + s.durationMs, 0))} of compute.
           </div>
         ) : null}
+
+        {status === "done" && result ? <PipelineBreakdown result={result} /> : null}
       </CardContent>
     </Card>
   );

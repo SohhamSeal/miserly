@@ -1,9 +1,10 @@
 import type { SVGProps } from "react";
-import { BookOpen, Shrink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tip } from "@/components/ui/tooltip";
+import { DocsModal } from "@/components/docs/DocsModal";
 import { SettingsModal } from "@/components/settings/SettingsModal";
+import logoUrl from "@/assets/miserly-logo.png";
 
 function GithubIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -15,15 +16,18 @@ function GithubIcon(props: SVGProps<SVGSVGElement>) {
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-border bg-card/95 shadow-header backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-3">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-900/40">
-            <Shrink className="h-5 w-5 text-white" />
-          </div>
+          <img
+            src={logoUrl}
+            alt="miserly logo"
+            draggable={false}
+            className="h-11 w-11 shrink-0 select-none object-contain"
+          />
           <div className="leading-tight">
             <div className="flex items-center gap-2">
-              <h1 className="text-[15px] font-semibold tracking-tight">miserly</h1>
+              <h1 className="text-base font-semibold tracking-tight">miserly</h1>
               <Badge variant="outline" className="hidden sm:inline-flex">
                 studio
               </Badge>
@@ -46,17 +50,7 @@ export function Header() {
               <span className="hidden md:inline">GitHub</span>
             </Button>
           </Tip>
-          <Tip content="Documentation — see the README">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => e.preventDefault()}
-              className="text-muted-foreground"
-            >
-              <BookOpen />
-              <span className="hidden md:inline">Docs</span>
-            </Button>
-          </Tip>
+          <DocsModal />
           <SettingsModal />
         </div>
       </div>

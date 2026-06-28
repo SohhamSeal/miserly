@@ -45,41 +45,42 @@
 
   /* Light theme — applied when <html> has the `light` class (see ThemeController). */
   .light {
-    --background: 240 20% 99%;
-    --foreground: 240 10% 9%;
+    /* Soft, slightly cool-tinted gray canvas so white cards + header lift off it. */
+    --background: 232 28% 95%;
+    --foreground: 232 22% 14%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 9%;
+    --card-foreground: 232 22% 14%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 9%;
+    --popover-foreground: 232 22% 14%;
 
-    --primary: 243 75% 59%;
+    --primary: 243 75% 58%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 5% 96%;
-    --secondary-foreground: 240 10% 12%;
+    --secondary: 233 24% 93%;
+    --secondary-foreground: 232 20% 22%;
 
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 42%;
+    --muted: 233 22% 93.5%;
+    --muted-foreground: 232 12% 42%;
 
-    --accent: 240 6% 93%;
-    --accent-foreground: 240 10% 12%;
+    --accent: 233 30% 91%;
+    --accent-foreground: 232 22% 18%;
 
-    --destructive: 0 72% 48%;
+    --destructive: 0 72% 49%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 60% 36%;
+    --success: 152 58% 35%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 32 92% 42%;
+    --warning: 30 88% 42%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 240 6% 89%;
-    --input: 240 6% 86%;
-    --ring: 243 75% 59%;
+    --border: 233 18% 86%;
+    --input: 233 18% 84%;
+    --ring: 243 75% 58%;
 
-    --grid: 240 9% 86%;
+    --grid: 233 20% 88%;
     color-scheme: light;
   }
 
@@ -155,4 +156,50 @@
 .cm-gutters {
   background: transparent !important;
   border-right: 1px solid hsl(var(--border)) !important;
+}
+
+/* Range slider (Pipeline Builder aggressiveness) — dependency-free, themed.
+   The filled portion is driven by the inline `--pct` custom property. */
+.miserly-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    hsl(var(--primary)) var(--pct, 50%),
+    hsl(var(--secondary)) var(--pct, 50%)
+  );
+  cursor: pointer;
+}
+.miserly-range:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.miserly-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  width: 14px;
+  border-radius: 9999px;
+  background: hsl(var(--card));
+  border: 2px solid hsl(var(--primary));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  transition: transform 0.1s ease;
+}
+.miserly-range::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+}
+.miserly-range::-moz-range-thumb {
+  height: 14px;
+  width: 14px;
+  border-radius: 9999px;
+  background: hsl(var(--card));
+  border: 2px solid hsl(var(--primary));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+}
+.miserly-range:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }

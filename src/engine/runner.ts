@@ -2,7 +2,7 @@ import { clamp, sleep } from "@/lib/utils";
 import { formatCompact, formatNumber } from "@/lib/format";
 import { buildBudgetAfter, buildBudgetBefore } from "./budget";
 import { classify } from "./classifier";
-import { PHASE_INFO, TYPE_LABELS } from "./labels";
+import { GOAL_LABELS, PHASE_INFO, TYPE_LABELS } from "./labels";
 import { planPipeline } from "./planner";
 import { defaultAggressiveness } from "./plugins/_base";
 import { getPlugin } from "./registry";
@@ -12,15 +12,56 @@ import type {
   CompressOutput,
   LogEvent,
   LogLevel,
+  ManualStage,
+  OptimizationGoal,
   OptimizationResult,
   PhaseId,
   PipelinePhase,
+  PlannedStage,
+  PlanResult,
   PluginConfig,
   RunCallbacks,
   RunOptions,
   StageResult,
   ValidationResult,
 } from "./types";
+
+/**
+ * Turn a user-defined pipeline into a PlanResult, bypassing the auto-planner.
+ * Stages run in exactly the given order with their own per-stage aggressiveness;
+ * unknown plugin ids are dropped.
+ */
+function buildManualPlan(
+  manual: ManualStage[],
+  goal: OptimizationGoal,
+  targetBudget: number,
+): PlanResult {
+  const stages: PlannedStage[] = [];
+  for (const m of manual) {
+    const plugin = getPlugin(m.pluginId);
+    if (!plugin) continue;
+    stages.push({
+      pluginId: m.pluginId,
+      reason: `${plugin.metadata.name} — manual stage at ${Math.round(
+        m.aggressiveness * 100,
+      )}% aggressiveness.`,
+      aggressiveness: m.aggressiveness,
+    });
+  }
+
+  const reasoning: string[] = [
+    `Manual pipeline — ${stages.length} stage${
+      stages.length === 1 ? "" : "s"
+    }, run exactly as you arranged them.`,
+    `Goal: ${GOAL_LABELS[goal]} — target ≈ ${formatCompact(targetBudget)} tokens.`,
+    ...stages.map((s, i) => `${i + 1}. ${s.reason}`),
+  ];
+  if (stages.length === 0) {
+    reasoning.push("No optimizers are enabled — the output will match the input.");
+  }
+
+  return { goal, targetBudget, stages, reasoning, mode: "manual" };
+}
 
 function initialPhases(): PipelinePhase[] {
   return PHASE_INFO.map((p) => ({ ...p, status: "waiting" as const }));
@@ -136,17 +177,28 @@ export async function runOptimization(
   // 3. Planning
   setPhase("planning", { status: "running" });
   await sleep(420);
-  const plan = planPipeline({
-    classification,
-    goal,
-    targetBudget,
-    enabledPluginIds: options.enabledPluginIds,
-  });
+  const isManual = options.manualPlan !== undefined;
+  const plan = isManual
+    ? buildManualPlan(options.manualPlan!, goal, targetBudget)
+    : planPipeline({
+        classification,
+        goal,
+        targetBudget,
+        enabledPluginIds: options.enabledPluginIds,
+      });
   const planNames = plan.stages.map(
     (s) => getPlugin(s.pluginId)?.metadata.name ?? s.pluginId,
   );
-  setPhase("planning", { status: "completed", detail: `${plan.stages.length}-stage pipeline` });
-  log("info", `Planned pipeline: ${planNames.join(" → ") || "no stages"}`);
+  setPhase("planning", {
+    status: "completed",
+    detail: `${plan.stages.length}-stage ${isManual ? "manual " : ""}pipeline`,
+  });
+  log(
+    "info",
+    `${isManual ? "Manual pipeline" : "Planned pipeline"}: ${
+      planNames.join(" → ") || "no stages"
+    }`,
+  );
 
   // 4. Compression
   setPhase("compression", { status: "running" });
@@ -171,7 +223,7 @@ export async function runOptimization(
     await sleep(stageDelay(currentTokens, slow));
 
     const config: PluginConfig = {
-      aggressiveness: defaultAggressiveness(goal),
+      aggressiveness: planned.aggressiveness ?? defaultAggressiveness(goal),
       similarityThreshold: 0.8,
       enabled: true,
     };

@@ -11,6 +11,13 @@ import {
 } from "@/engine";
 import { SAMPLES } from "@/data/samples";
 import { runtime } from "@/config/runtime";
+import { usePipelineStore } from "@/store/usePipelineStore";
+import { useHistoryStore, type HistoryEntry } from "@/store/useHistoryStore";
+
+/** Phase list with every step marked done — used when re-opening a past run. */
+function completedPhases(): PipelinePhase[] {
+  return PHASE_INFO.map((p) => ({ ...p, status: "completed" as const }));
+}
 
 export type RunStatus = "idle" | "running" | "done" | "error";
 
@@ -39,6 +46,8 @@ interface StudioState {
   clearInput: () => void;
   reset: () => void;
   optimize: () => Promise<void>;
+  /** Re-open a past run: restores its input, settings, pipeline and report. */
+  loadFromHistory: (entry: HistoryEntry) => void;
 }
 
 export const useStudioStore = create<StudioState>((set, get) => ({
@@ -62,6 +71,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   loadSample: (id) => {
     const sample = SAMPLES.find((s) => s.id === id);
     if (!sample) return;
+    useHistoryStore.getState().setActive(null);
     set({
       input: sample.content,
       status: "idle",
@@ -73,7 +83,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     });
   },
 
-  clearInput: () =>
+  clearInput: () => {
+    useHistoryStore.getState().setActive(null);
     set({
       input: "",
       status: "idle",
@@ -82,9 +93,11 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       liveStages: [],
       logs: [],
       phases: freshPhases(),
-    }),
+    });
+  },
 
-  reset: () =>
+  reset: () => {
+    useHistoryStore.getState().setActive(null);
     set({
       status: "idle",
       result: null,
@@ -92,11 +105,24 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       liveStages: [],
       logs: [],
       phases: freshPhases(),
-    }),
+    });
+  },
 
   optimize: async () => {
     const { input, goal, targetBudget, modelId, status } = get();
     if (status === "running" || input.trim() === "") return;
+
+    // Manual pipeline + content-type override come from the Pipeline Builder.
+    const pipeline = usePipelineStore.getState();
+    const manualPlan =
+      pipeline.mode === "manual" ? pipeline.toManualPlan() : undefined;
+    const contentTypeOverride =
+      pipeline.contentType !== "auto"
+        ? pipeline.contentType
+        : // When auto-detect is off and no explicit type is chosen, use a neutral plan.
+          runtime.autoDetect
+          ? undefined
+          : "mixed";
 
     set({
       status: "running",
@@ -114,8 +140,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
           goal,
           targetBudget,
           modelId,
-          // When auto-detect is off, skip classification and use a neutral plan.
-          contentTypeOverride: runtime.autoDetect ? undefined : "mixed",
+          contentTypeOverride,
+          manualPlan,
         },
         {
           onPhases: (phases) => set({ phases }),
@@ -125,11 +151,48 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         },
       );
       set({ status: "done", result });
+
+      // Capture the run for the session history. We snapshot the pipeline
+      // config + model here because the result itself doesn't carry them.
+      const p = usePipelineStore.getState();
+      useHistoryStore.getState().record({
+        id: result.id,
+        createdAt: result.createdAt,
+        modelId,
+        pipelineMode: p.mode,
+        pipelineContentType: p.contentType,
+        pipelineStages: p.stages,
+        result,
+      });
     } catch (err) {
       set({
         status: "error",
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  },
+
+  loadFromHistory: (entry) => {
+    const { result } = entry;
+    // Restore the Pipeline Builder to exactly how this run was configured.
+    const pipeline = usePipelineStore.getState();
+    pipeline.setMode(entry.pipelineMode);
+    pipeline.setContentType(entry.pipelineContentType);
+    pipeline.setStages(entry.pipelineStages);
+
+    set({
+      input: result.inputText,
+      goal: result.plan.goal,
+      targetBudget: result.plan.targetBudget,
+      modelId: entry.modelId,
+      status: "done",
+      result,
+      error: null,
+      liveStages: result.stages,
+      logs: [],
+      phases: completedPhases(),
+    });
+
+    useHistoryStore.getState().setActive(entry.id);
   },
 }));

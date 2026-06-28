@@ -30,6 +30,8 @@ interface SettingsState {
   defaultGoal: OptimizationGoal;
   defaultModelId: string;
   showGuide: boolean;
+  /** Whether the run-history sidebar is expanded (remembered across reloads). */
+  historyOpen: boolean;
 
   // --- Per-feature runtime overrides (undefined = use build-time default) ---
   featureOverrides: Partial<Record<FeatureKey, boolean>>;
@@ -40,6 +42,7 @@ interface SettingsState {
   setDefaultGoal: (goal: OptimizationGoal) => void;
   setDefaultModelId: (id: string) => void;
   setShowGuide: (value: boolean) => void;
+  setHistoryOpen: (value: boolean) => void;
   setFeatureEnabled: (key: FeatureKey, enabled: boolean) => void;
   resetFeatureOverrides: () => void;
 }
@@ -53,6 +56,7 @@ export const useSettingsStore = create<SettingsState>()(
       defaultGoal: "balanced",
       defaultModelId: DEFAULT_MODEL_ID,
       showGuide: true,
+      historyOpen: true,
       featureOverrides: {},
 
       setTheme: (theme) => set({ theme }),
@@ -61,6 +65,7 @@ export const useSettingsStore = create<SettingsState>()(
       setDefaultGoal: (goal) => set({ defaultGoal: goal }),
       setDefaultModelId: (id) => set({ defaultModelId: id }),
       setShowGuide: (value) => set({ showGuide: value }),
+      setHistoryOpen: (value) => set({ historyOpen: value }),
       setFeatureEnabled: (key, enabled) => {
         // Can't enable a feature whose package isn't installed.
         if (enabled && !FEATURE_AVAILABILITY[key]) return;
@@ -80,6 +85,7 @@ export const useSettingsStore = create<SettingsState>()(
         defaultGoal: state.defaultGoal,
         defaultModelId: state.defaultModelId,
         showGuide: state.showGuide,
+        historyOpen: state.historyOpen,
         featureOverrides: state.featureOverrides,
       }),
     },

@@ -136,6 +136,12 @@ export interface ClassificationResult {
 export interface PlannedStage {
   pluginId: string;
   reason: string;
+  /**
+   * Per-stage aggressiveness (0..1). Set by manual pipelines so each stage can
+   * push harder or softer than the goal default; when omitted the runner falls
+   * back to the goal's default aggressiveness.
+   */
+  aggressiveness?: number;
 }
 
 export interface PlanResult {
@@ -143,7 +149,19 @@ export interface PlanResult {
   targetBudget: number;
   stages: PlannedStage[];
   reasoning: string[];
-  mode: "sequential";
+  /** "sequential" = auto-planned; "manual" = user-defined Pipeline Builder run. */
+  mode: "sequential" | "manual";
+}
+
+/**
+ * One stage of a user-defined pipeline (Pipeline Builder). The order of the
+ * array is the exact execution order — the planner's selection and category
+ * reordering are bypassed entirely.
+ */
+export interface ManualStage {
+  pluginId: string;
+  /** 0..1 — how hard this stage pushes. */
+  aggressiveness: number;
 }
 
 export interface StageResult {
@@ -232,6 +250,11 @@ export interface RunOptions {
   targetBudget: number;
   contentTypeOverride?: ContentType | "auto";
   enabledPluginIds?: string[];
+  /**
+   * Explicit, user-defined pipeline. When provided (even as an empty array),
+   * the auto-planner is bypassed and exactly these stages run in this order.
+   */
+  manualPlan?: ManualStage[];
   modelId: string;
 }
 

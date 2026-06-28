@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { ArrowRight, Check, Copy, Download, Maximize2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, Check, Copy, Download, Maximize2, RotateCcw } from "lucide-react";
+import { countTokens } from "@/engine";
 import { useStudioStore } from "@/store/useStudioStore";
 import { formatNumber } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -54,50 +55,82 @@ function CopyButton({ text }: { text: string }) {
 export function OutputPanel() {
   const result = useStudioStore((s) => s.result);
   const [wrap, setWrap] = useState(false);
+  // `null` => showing the engine's output untouched. A string => user's edits.
+  const [edited, setEdited] = useState<string | null>(null);
+
+  // Discard manual edits whenever a different run loads (new optimize / restore).
+  useEffect(() => {
+    setEdited(null);
+  }, [result?.id]);
+
+  const outText = edited ?? result?.outputText ?? "";
+  const isEdited = edited !== null && edited !== result?.outputText;
+
+  // Token count + reduction track the edited text so the numbers stay honest.
+  const optimizedTokens = useMemo(
+    () => (edited === null ? result?.optimizedTokens ?? 0 : countTokens(edited)),
+    [edited, result?.optimizedTokens],
+  );
 
   if (!result) return null;
 
   const reduction =
     result.originalTokens > 0
-      ? Math.round((1 - result.optimizedTokens / result.originalTokens) * 100)
+      ? Math.round((1 - optimizedTokens / result.originalTokens) * 100)
       : 0;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-        <SectionTitle hint="The compressed context, ready to paste into your LLM call. Read-only.">
+        <SectionTitle hint="The compressed context, ready to paste into your LLM call. Editable — tweak it before you copy.">
           Optimized output
         </SectionTitle>
         <div className="flex items-center gap-3">
-          <Tip content="Original tokens → optimized tokens for this run.">
+          <Tip content="Original tokens → optimized tokens. Updates live as you edit.">
             <div className="flex items-center gap-2 font-mono text-sm tabular-nums">
               <span className="text-muted-foreground line-through decoration-muted-foreground/40">
                 {formatNumber(result.originalTokens)}
               </span>
               <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="font-semibold text-foreground">
-                {formatNumber(result.optimizedTokens)}
+                {formatNumber(optimizedTokens)}
               </span>
               <span className="rounded bg-success/15 px-1.5 py-0.5 text-xs text-success">
                 −{reduction}%
               </span>
             </div>
           </Tip>
+          {isEdited ? (
+            <Tip content="You've edited the output — the counts above reflect your changes.">
+              <span className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning">
+                edited
+              </span>
+            </Tip>
+          ) : null}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-y border-border bg-secondary/20 px-3 py-2">
-        <CopyButton text={result.outputText} />
+        <CopyButton text={outText} />
         <Tip content="Download as a .txt file">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => downloadText(result.outputText, "miserly-output.txt")}
+            onClick={() => downloadText(outText, "miserly-output.txt")}
           >
             <Download />
             Download
           </Button>
         </Tip>
+
+        {isEdited ? (
+          <Tip content="Discard your edits and restore the engine's optimized output.">
+            <Button variant="ghost" size="sm" onClick={() => setEdited(null)}>
+              <RotateCcw />
+              Revert
+            </Button>
+          </Tip>
+        ) : null}
 
         <Dialog>
           <Tip content="Open in fullscreen">
@@ -114,8 +147,8 @@ export function OutputPanel() {
             </DialogHeader>
             <div className="h-full overflow-hidden px-1 pb-4">
               <Editor
-                value={result.outputText}
-                readOnly
+                value={outText}
+                onChange={setEdited}
                 lineWrap={wrap}
                 contentType={result.classification.primary}
               />
@@ -135,8 +168,8 @@ export function OutputPanel() {
 
       <div className="h-[42vh] min-h-[320px]">
         <Editor
-          value={result.outputText}
-          readOnly
+          value={outText}
+          onChange={setEdited}
           lineWrap={wrap}
           contentType={result.classification.primary}
         />
