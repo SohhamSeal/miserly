@@ -30,7 +30,11 @@ interface SettingsState {
   defaultGoal: OptimizationGoal;
   defaultModelId: string;
   showGuide: boolean;
-  /** Whether the run-history sidebar is expanded (remembered across reloads). */
+  /**
+   * Whether the run-history sidebar is expanded. Intentionally NOT persisted —
+   * every page load starts collapsed (the slim rail), so it never pops open on
+   * its own after a reload. Toggling still works within a session.
+   */
   historyOpen: boolean;
 
   // --- Per-feature runtime overrides (undefined = use build-time default) ---
@@ -56,7 +60,7 @@ export const useSettingsStore = create<SettingsState>()(
       defaultGoal: "balanced",
       defaultModelId: DEFAULT_MODEL_ID,
       showGuide: true,
-      historyOpen: true,
+      historyOpen: false,
       featureOverrides: {},
 
       setTheme: (theme) => set({ theme }),
@@ -78,6 +82,8 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: "miserly-settings",
       version: 1,
+      // NOTE: `historyOpen` is deliberately omitted — we don't want the sidebar
+      // state to survive reloads.
       partialize: (state) => ({
         theme: state.theme,
         reduceMotion: state.reduceMotion,
@@ -85,8 +91,14 @@ export const useSettingsStore = create<SettingsState>()(
         defaultGoal: state.defaultGoal,
         defaultModelId: state.defaultModelId,
         showGuide: state.showGuide,
-        historyOpen: state.historyOpen,
         featureOverrides: state.featureOverrides,
+      }),
+      // Force the sidebar collapsed on every load, even if an older build had
+      // persisted `historyOpen: true` into localStorage.
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<SettingsState>),
+        historyOpen: false,
       }),
     },
   ),

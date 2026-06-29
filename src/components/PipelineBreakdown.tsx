@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ChevronDown, Layers } from "lucide-react";
+import { ChevronRight, Layers } from "lucide-react";
 import {
   TYPE_LABELS,
   classify,
@@ -9,14 +9,22 @@ import {
   type OptimizationResult,
 } from "@/engine";
 import { formatCompact } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Tip } from "@/components/ui/tooltip";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 interface SectionInsight {
   startLine: number;
   endLine: number;
-  preview: string;
+  lineCount: number;
+  text: string;
   type: ContentType;
   confidence: number;
   tokens: number;
@@ -96,11 +104,11 @@ function analyzeSections(input: string, ranPluginIds: string[]): SectionInsight[
 
   return merged.map((m) => {
     const appliedPluginIds = ranPluginIds.filter((id) => getPlugin(id)?.supports(m.type));
-    const firstLine = m.text.split("\n").find((l) => l.trim() !== "") ?? "";
     return {
       startLine: m.startLine,
       endLine: m.endLine,
-      preview: firstLine.slice(0, 120),
+      lineCount: m.endLine - m.startLine + 1,
+      text: m.text,
       type: m.type,
       confidence: m.confidence,
       tokens: countTokens(m.text),
@@ -109,61 +117,79 @@ function analyzeSections(input: string, ranPluginIds: string[]): SectionInsight[
   });
 }
 
-function SectionItem({ section }: { section: SectionInsight }) {
+const PREVIEW_LINES = 10;
+
+function SectionCard({ section, index }: { section: SectionInsight; index: number }) {
+  const [showFull, setShowFull] = React.useState(false);
+  const lines = section.text.split("\n");
+  const shown = showFull ? lines : lines.slice(0, PREVIEW_LINES);
   const lineLabel =
     section.startLine === section.endLine
       ? `L${section.startLine}`
       : `L${section.startLine}–${section.endLine}`;
 
   return (
-    <div className="rounded-md border border-border bg-secondary/20 p-2.5">
-      <div className="flex flex-wrap items-center gap-1.5">
+    <div className="rounded-lg border border-border bg-secondary/20 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="grid h-5 w-5 place-items-center rounded bg-muted text-[10px] font-semibold text-muted-foreground">
+          {index + 1}
+        </span>
         <Tip content="Line range in your original input.">
-          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
             {lineLabel}
           </span>
         </Tip>
         <Badge variant="secondary">{TYPE_LABELS[section.type]}</Badge>
         <Tip content="Classifier confidence for this section.">
-          <span className="text-[11px] tabular-nums text-muted-foreground">
+          <span className="text-xs tabular-nums text-muted-foreground">
             {Math.round(section.confidence * 100)}%
           </span>
         </Tip>
         <span className="ml-auto font-mono text-[11px] tabular-nums text-muted-foreground">
-          {formatCompact(section.tokens)} tok
+          {formatCompact(section.tokens)} tok · {section.lineCount}{" "}
+          {section.lineCount === 1 ? "line" : "lines"}
         </span>
       </div>
 
-      <div className="mt-1.5 truncate font-mono text-[11px] text-muted-foreground/80">
-        {section.preview || "(blank)"}
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-1">
-        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
-          Applied
-        </span>
+      <div className="mt-2.5">
+        <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+          Applied optimizers
+        </div>
         {section.appliedPluginIds.length > 0 ? (
-          section.appliedPluginIds.map((id) => (
-            <span
-              key={id}
-              className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
-            >
-              {getPlugin(id)?.metadata.name ?? id}
-            </span>
-          ))
+          <div className="flex flex-wrap gap-1">
+            {section.appliedPluginIds.map((id) => (
+              <span
+                key={id}
+                className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
+              >
+                {getPlugin(id)?.metadata.name ?? id}
+              </span>
+            ))}
+          </div>
         ) : (
-          <span className="text-[10px] italic text-muted-foreground/60">
+          <span className="text-[11px] italic text-muted-foreground/60">
             no optimizer in this run targets {TYPE_LABELS[section.type]}
           </span>
         )}
       </div>
+
+      <pre className="mt-2.5 whitespace-pre-wrap break-words rounded bg-background/60 p-2.5 font-mono text-[11px] leading-relaxed text-muted-foreground/90">
+        {shown.join("\n") || "(blank)"}
+      </pre>
+      {lines.length > PREVIEW_LINES ? (
+        <button
+          type="button"
+          onClick={() => setShowFull((v) => !v)}
+          className="mt-1.5 text-[11px] font-medium text-primary hover:underline"
+        >
+          {showFull ? "Show less" : `Show all ${lines.length} lines`}
+        </button>
+      ) : null}
     </div>
   );
 }
 
 export function PipelineBreakdown({ result }: { result: OptimizationResult }) {
-  const [open, setOpen] = React.useState(false);
-
   const sections = React.useMemo(
     () =>
       analyzeSections(
@@ -178,37 +204,38 @@ export function PipelineBreakdown({ result }: { result: OptimizationResult }) {
   if (sections.length === 0) return null;
 
   return (
-    <div className="mt-2 rounded-lg border border-border">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-accent/50"
-      >
-        <Layers className="h-4 w-4 text-primary" />
-        Section breakdown
-        <span className="text-xs font-normal text-muted-foreground">
-          · {sections.length} {sections.length === 1 ? "section" : "sections"}
-        </span>
-        <ChevronDown
-          className={cn(
-            "ml-auto h-4 w-4 text-muted-foreground transition-transform",
-            !open && "-rotate-90",
-          )}
-        />
-      </button>
-
-      {open ? (
-        <div className="space-y-1.5 border-t border-border p-2.5">
-          <p className="px-0.5 pb-1 text-[11px] leading-relaxed text-muted-foreground">
+    <Sheet>
+      <SheetTrigger asChild>
+        <button
+          type="button"
+          className="mt-2 flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-sm font-medium transition-colors hover:border-primary/30 hover:bg-accent/50"
+        >
+          <Layers className="h-4 w-4 text-primary" />
+          Section breakdown
+          <span className="text-xs font-normal text-muted-foreground">
+            · {sections.length} {sections.length === 1 ? "section" : "sections"}
+          </span>
+          <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
+        </button>
+      </SheetTrigger>
+      <SheetContent className="sm:max-w-xl md:max-w-2xl">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
+            <Layers className="h-4 w-4 text-primary" />
+            Section breakdown
+          </SheetTitle>
+          <SheetDescription>
             How each part of your input was classified, and which optimizers in this run handle that
-            type. (Optimizers run over the whole document; this maps them by content type.)
-          </p>
+            type. Optimizers run over the whole document — this maps them by content type, not as a
+            per-line diff.
+          </SheetDescription>
+        </SheetHeader>
+        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-5">
           {sections.map((s, i) => (
-            <SectionItem key={`${s.startLine}-${i}`} section={s} />
+            <SectionCard key={`${s.startLine}-${i}`} section={s} index={i} />
           ))}
         </div>
-      ) : null}
-    </div>
+      </SheetContent>
+    </Sheet>
   );
 }
