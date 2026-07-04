@@ -129,7 +129,7 @@ export function InputPanel() {
           <Count label="lines" value={formatNumber(lines)} hint="Number of lines." />
           <Count
             label="tokens"
-            value={formatNumber(tokens)}
+            value={(accurate ? "" : "~") + formatNumber(tokens)}
             hint={
               accurate
                 ? "Live token count using the exact OpenAI tokenizer — what an LLM is billed on."

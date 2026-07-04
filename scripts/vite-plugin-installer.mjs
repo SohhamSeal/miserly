@@ -20,6 +20,10 @@ import { ROOT } from "./lib.mjs";
 
 const ENDPOINT = "/__miserly/api/install";
 
+// Guard against overlapping installs: two concurrent `npm install` runs on the
+// same project can corrupt node_modules / the lockfile.
+let installing = false;
+
 export function miserlyInstaller() {
   return {
     name: "miserly-installer",
@@ -27,6 +31,31 @@ export function miserlyInstaller() {
     configureServer(server) {
       server.middlewares.use(ENDPOINT, (req, res, next) => {
         if (req.method !== "POST") return next();
+
+        // Only accept requests from the local dev origin. Without this, any
+        // website you visit while `npm run dev` is running could POST here and
+        // trigger `npm install` on your machine — a cross-site request still
+        // reaches the server even though the browser hides the response.
+        const origin = req.headers.origin;
+        if (origin) {
+          let allowed = false;
+          try {
+            // URL.hostname keeps IPv6 brackets ("[::1]"); strip them so the
+            // loopback address compares equal.
+            const host = new URL(origin).hostname.replace(/^\[|\]$/g, "");
+            allowed = host === "localhost" || host === "127.0.0.1" || host === "::1";
+          } catch {
+            allowed = false;
+          }
+          if (!allowed) {
+            res.statusCode = 403;
+            res.setHeader("content-type", "text/plain; charset=utf-8");
+            res.end(
+              `__MISERLY_DONE__${JSON.stringify({ ok: false, error: "Forbidden origin" })}\n`,
+            );
+            return;
+          }
+        }
 
         let body = "";
         req.on("data", (chunk) => (body += chunk));
@@ -47,7 +76,19 @@ export function miserlyInstaller() {
             return;
           }
 
+          if (installing) {
+            res.statusCode = 409;
+            res.end(
+              `__MISERLY_DONE__${JSON.stringify({
+                ok: false,
+                error: "An install is already in progress — please wait for it to finish.",
+              })}\n`,
+            );
+            return;
+          }
+
           res.statusCode = 200;
+          installing = true;
           const child = spawn("node", ["scripts/install-feature.mjs", feature], {
             cwd: ROOT,
             shell: process.platform === "win32",
@@ -64,6 +105,7 @@ export function miserlyInstaller() {
           child.stderr.on("data", write);
 
           child.on("close", (code) => {
+            installing = false;
             const ok = code === 0;
             write(`\n__MISERLY_DONE__${JSON.stringify({ ok, code })}\n`);
             res.end();
@@ -76,6 +118,7 @@ export function miserlyInstaller() {
           });
 
           child.on("error", (err) => {
+            installing = false;
             write(`\n[error] ${err.message}\n__MISERLY_DONE__${JSON.stringify({ ok: false })}\n`);
             res.end();
           });

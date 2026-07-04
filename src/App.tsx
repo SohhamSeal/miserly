@@ -67,6 +67,7 @@ export default function App() {
   const defaultModelId = useSettingsStore((s) => s.defaultModelId);
   const showCost = useFeatureEnabled("costComparison");
   const showBudget = useFeatureEnabled("contextBudget");
+  const accurateTokenizer = useFeatureEnabled("accurateTokenizer");
 
   // Seed the session from the user's saved defaults (once, on mount).
   useEffect(() => {
@@ -101,11 +102,16 @@ export default function App() {
 
             {result ? (
               <div className="space-y-5">
-                <div className="grid gap-5 xl:grid-cols-12">
-                  <div className="xl:col-span-8">
+                {/* grid-cols-1 + min-w-0: below xl the implicit grid track is
+                    `auto`, so a long code line in the editor would blow the
+                    column (and the whole document) past the viewport. `grid-cols-1`
+                    resolves to minmax(0,1fr) and min-w-0 lets the panel shrink so
+                    the editor scrolls internally instead. */}
+                <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+                  <div className="min-w-0 xl:col-span-8">
                     <OutputPanel />
                   </div>
-                  <div className="xl:col-span-4">
+                  <div className="min-w-0 xl:col-span-4">
                     <LiveProgress />
                   </div>
                 </div>
@@ -115,7 +121,9 @@ export default function App() {
                 {showCost || showBudget ? (
                   <div
                     className={
-                      showCost && showBudget ? "grid gap-5 lg:grid-cols-2" : "grid gap-5"
+                      showCost && showBudget
+                        ? "grid grid-cols-1 gap-5 lg:grid-cols-2"
+                        : "grid grid-cols-1 gap-5"
                     }
                   >
                     {showCost ? <CostVisualization /> : null}
@@ -127,8 +135,11 @@ export default function App() {
           </main>
 
           <footer className="mx-auto w-full max-w-[1400px] px-4 pb-10 pt-4 text-center text-xs text-muted-foreground sm:px-6">
-            miserly runs entirely in your browser · token counts use a real tokenizer · costs are
-            estimates
+            miserly runs entirely in your browser ·{" "}
+            {accurateTokenizer
+              ? "token counts use a real tokenizer"
+              : "token counts are estimated (~4 chars/token)"}{" "}
+            · costs are estimates
           </footer>
         </div>
       </div>

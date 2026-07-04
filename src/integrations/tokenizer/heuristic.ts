@@ -5,5 +5,9 @@
  */
 export function countHeuristic(text: string): number {
   if (!text) return 0;
-  return Math.max(1, Math.round(text.length / 4));
+  // Collapse runs of spaces/tabs first: a real tokenizer treats indentation and
+  // padding as roughly one token, not one per ~4 chars. Without this, whitespace-
+  // stripping stages look like they save far more than they actually do.
+  const compact = text.replace(/[ \t]+/g, " ");
+  return Math.max(1, Math.round(compact.length / 4));
 }

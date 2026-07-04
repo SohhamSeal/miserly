@@ -13,6 +13,7 @@ import { SAMPLES } from "@/data/samples";
 import { runtime } from "@/config/runtime";
 import { usePipelineStore } from "@/store/usePipelineStore";
 import { useHistoryStore, type HistoryEntry } from "@/store/useHistoryStore";
+import { featureEnabledFrom, useSettingsStore } from "@/store/useSettingsStore";
 
 /** Phase list with every step marked done — used when re-opening a past run. */
 function completedPhases(): PipelinePhase[] {
@@ -36,9 +37,19 @@ interface StudioState {
   liveStages: StageResult[];
   logs: LogEvent[];
   result: OptimizationResult | null;
+  /** User's manual edits to the optimized output (`null` => showing engine
+   * output untouched). Lifted into the store so the report / cost / budget
+   * cards can recompute from what's actually on screen. */
+  editedOutput: string | null;
   error: string | null;
+  /** Bumped whenever the run context changes; lets a superseded async run detect
+   * that it must not write its (now stale) result back into the store. */
+  runToken: number;
 
   setInput: (value: string) => void;
+  setEditedOutput: (text: string | null) => void;
+  /** Abandon an in-flight run, restoring the previous result if there was one. */
+  cancel: () => void;
   setModelId: (id: string) => void;
   setGoal: (goal: OptimizationGoal) => void;
   setTargetBudget: (tokens: number) => void;
@@ -61,9 +72,51 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   liveStages: [],
   logs: [],
   result: null,
+  editedOutput: null,
   error: null,
+  runToken: 0,
 
-  setInput: (value) => set({ input: value }),
+  setEditedOutput: (text) => set({ editedOutput: text }),
+
+  cancel: () =>
+    set((s) => {
+      if (s.status !== "running") return {};
+      const runToken = s.runToken + 1;
+      // If this run superseded a previous result, fall back to showing it;
+      // otherwise there's nothing to show so return to the empty idle state.
+      return s.result
+        ? {
+            runToken,
+            status: "done" as const,
+            phases: completedPhases(),
+            liveStages: s.result.stages,
+          }
+        : {
+            runToken,
+            status: "idle" as const,
+            phases: freshPhases(),
+            liveStages: [],
+            logs: [],
+          };
+    }),
+
+  setInput: (value) =>
+    set((s) =>
+      s.status === "running"
+        ? {
+            // Editing the input invalidates an in-flight run: bump the token so
+            // its (now stale) result is dropped when it finishes, and drop back
+            // to idle so the UI doesn't hang on a spinner for a run that can no
+            // longer match what's on screen.
+            input: value,
+            runToken: s.runToken + 1,
+            status: "idle",
+            phases: freshPhases(),
+            liveStages: [],
+            logs: [],
+          }
+        : { input: value },
+    ),
   setModelId: (id) => set({ modelId: id }),
   setGoal: (goal) => set({ goal }),
   setTargetBudget: (tokens) => set({ targetBudget: tokens }),
@@ -72,40 +125,46 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     const sample = SAMPLES.find((s) => s.id === id);
     if (!sample) return;
     useHistoryStore.getState().setActive(null);
-    set({
+    set((s) => ({
+      runToken: s.runToken + 1,
       input: sample.content,
       status: "idle",
       result: null,
+      editedOutput: null,
       error: null,
       liveStages: [],
       logs: [],
       phases: freshPhases(),
-    });
+    }));
   },
 
   clearInput: () => {
     useHistoryStore.getState().setActive(null);
-    set({
+    set((s) => ({
+      runToken: s.runToken + 1,
       input: "",
       status: "idle",
       result: null,
+      editedOutput: null,
       error: null,
       liveStages: [],
       logs: [],
       phases: freshPhases(),
-    });
+    }));
   },
 
   reset: () => {
     useHistoryStore.getState().setActive(null);
-    set({
+    set((s) => ({
+      runToken: s.runToken + 1,
       status: "idle",
       result: null,
+      editedOutput: null,
       error: null,
       liveStages: [],
       logs: [],
       phases: freshPhases(),
-    });
+    }));
   },
 
   optimize: async () => {
@@ -124,14 +183,29 @@ export const useStudioStore = create<StudioState>((set, get) => ({
           ? undefined
           : "mixed";
 
+    // Tag this run. If the user clears the input, loads a sample, resets, or
+    // re-opens a history entry mid-run, the token changes and every write below
+    // is dropped — otherwise a slow run would "resurrect" its stale result.
+    const token = get().runToken + 1;
+    const alive = () => get().runToken === token;
+    // Keep the PREVIOUS result on screen while this run animates so a repeat run
+    // can be compared A/B during the wait; it's replaced only on success. Any
+    // manual edits are dropped since they belong to the old output.
     set({
+      runToken: token,
       status: "running",
-      result: null,
+      editedOutput: null,
       error: null,
       logs: [],
       liveStages: [],
       phases: freshPhases(),
     });
+
+    // Pacing is a presentation choice: skip the fake staged latency entirely
+    // when Animations is off or the user prefers reduced motion.
+    const settings = useSettingsStore.getState();
+    const pace =
+      featureEnabledFrom(settings, "animations") && !settings.reduceMotion ? 1 : 0;
 
     try {
       const result = await runOptimization(
@@ -142,14 +216,21 @@ export const useStudioStore = create<StudioState>((set, get) => ({
           modelId,
           contentTypeOverride,
           manualPlan,
+          pace,
         },
         {
-          onPhases: (phases) => set({ phases }),
-          onStage: (stage) =>
-            set((state) => ({ liveStages: [...state.liveStages, stage] })),
-          onLog: (event) => set((state) => ({ logs: [...state.logs, event] })),
+          onPhases: (phases) => {
+            if (alive()) set({ phases });
+          },
+          onStage: (stage) => {
+            if (alive()) set((state) => ({ liveStages: [...state.liveStages, stage] }));
+          },
+          onLog: (event) => {
+            if (alive()) set((state) => ({ logs: [...state.logs, event] }));
+          },
         },
       );
+      if (!alive()) return;
       set({ status: "done", result });
 
       // Capture the run for the session history. We snapshot the pipeline
@@ -165,9 +246,12 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         result,
       });
     } catch (err) {
+      if (!alive()) return;
+      // A failed run has no output to show, so clear any stale previous result.
       set({
         status: "error",
         error: err instanceof Error ? err.message : String(err),
+        result: null,
       });
     }
   },
@@ -180,18 +264,20 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     pipeline.setContentType(entry.pipelineContentType);
     pipeline.setStages(entry.pipelineStages);
 
-    set({
+    set((s) => ({
+      runToken: s.runToken + 1,
       input: result.inputText,
       goal: result.plan.goal,
       targetBudget: result.plan.targetBudget,
       modelId: entry.modelId,
       status: "done",
       result,
+      editedOutput: null,
       error: null,
       liveStages: result.stages,
       logs: [],
       phases: completedPhases(),
-    });
+    }));
 
     useHistoryStore.getState().setActive(entry.id);
   },

@@ -40,14 +40,16 @@ export function Header() {
 
         <div className="flex items-center gap-1">
           <Tip content="View the source on GitHub">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => e.preventDefault()}
-              className="text-muted-foreground"
-            >
-              <GithubIcon />
-              <span className="hidden md:inline">GitHub</span>
+            <Button variant="ghost" size="sm" asChild className="text-muted-foreground">
+              <a
+                href="https://github.com/SohhamSeal/miserly"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="View the miserly source on GitHub"
+              >
+                <GithubIcon />
+                <span className="hidden md:inline">GitHub</span>
+              </a>
             </Button>
           </Tip>
           <DocsModal />

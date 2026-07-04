@@ -1,4 +1,4 @@
-import { clamp, sleep } from "@/lib/utils";
+import { assertNever, clamp, sleep } from "@/lib/utils";
 import { formatCompact, formatNumber } from "@/lib/format";
 import { buildBudgetAfter, buildBudgetBefore } from "./budget";
 import { classify } from "./classifier";
@@ -72,49 +72,212 @@ function stageDelay(tokens: number, slow: boolean): number {
   return Math.round(base + Math.min(tokens / 2200, 1) * 600);
 }
 
+/** Common capitalized words that are not meaningful "entities". */
+const ENTITY_STOPWORDS = new Set([
+  "The", "This", "That", "These", "Those", "There", "Then", "They", "Their",
+  "With", "From", "When", "What", "Where", "Which", "Will", "Would", "Should",
+  "And", "But", "For", "Not", "You", "Your", "Are", "Was", "Were",
+]);
+
 function extractEntities(text: string): string[] {
   const matches =
     text.match(/[A-Z][a-zA-Z]{2,}|\b\d+(?:\.\d+)?\b|[A-Z_]{3,}|ERROR|FATAL/g) ?? [];
-  return [...new Set(matches)].slice(0, 250);
+  return [...new Set(matches)].filter((e) => !ENTITY_STOPWORDS.has(e)).slice(0, 250);
 }
 
-function validate(
-  original: string,
-  optimized: string,
-  stages: StageResult[],
-): ValidationResult {
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function wordSet(text: string): Set<string> {
+  return new Set(text.toLowerCase().match(/[a-z0-9]+/g) ?? []);
+}
+
+/**
+ * Real, measured validation — no fabricated scores.
+ *  • semanticSimilarity = Jaccard overlap of the two word sets (lexical, honest;
+ *    it legitimately drops as compression rises).
+ *  • informationRetention = recall: fraction of the ORIGINAL's distinct words
+ *    still present in the output.
+ *  • entityRetention = fraction of load-bearing tokens (Caps words, numbers,
+ *    CONSTANTS, ERROR/FATAL) still present.
+ * A stage that changes nothing (e.g. a failed stage) now correctly reports
+ * ~100% similarity instead of a made-up 55%.
+ */
+function validate(original: string, optimized: string): ValidationResult {
   const origTokens = countTokens(original);
   const optTokens = countTokens(optimized);
   const reduction = origTokens > 0 ? 1 - optTokens / origTokens : 0;
-  const avgQuality = stages.length
-    ? stages.reduce((a, s) => a + s.qualityScore, 0) / stages.length
-    : 1;
 
-  const similarity = clamp(0.99 - reduction * 0.12 - (1 - avgQuality) * 0.5, 0.55, 0.995);
-  const retention = clamp(avgQuality * 0.85 + (1 - reduction) * 0.15, 0.5, 0.99);
+  const origWords = wordSet(original);
+  const optWords = wordSet(optimized);
+  let shared = 0;
+  for (const w of origWords) if (optWords.has(w)) shared++;
+  const union = origWords.size + optWords.size - shared;
+  const similarity = union > 0 ? shared / union : 1;
+  const retention = origWords.size > 0 ? shared / origWords.size : 1;
 
   const entities = extractEntities(original);
-  const present = entities.filter((e) => optimized.includes(e)).length;
-  const entityRetention = entities.length
-    ? clamp(0.55 + (present / entities.length) * 0.44, 0.55, 0.99)
-    : 0.95;
+  // Word-boundary match, not substring: `includes("42")` would falsely match
+  // inside "1042", and "Error" inside "Errors" — inflating the score that gates
+  // acceptance and carries 40% of the confidence blend.
+  const present = entities.filter((e) =>
+    new RegExp(`\\b${escapeRegExp(e)}\\b`).test(optimized),
+  ).length;
+  const entityRetention = entities.length ? present / entities.length : 1;
 
-  const confidence = clamp((similarity + retention + avgQuality) / 3, 0.5, 0.99);
+  // Weight the meaning-bearing signals (entities, retention) above raw lexical
+  // overlap, which drops naturally under heavy compression.
+  const confidence = clamp(
+    entityRetention * 0.4 + retention * 0.4 + similarity * 0.2,
+    0,
+    1,
+  );
+
   const warnings: string[] = [];
   if (reduction > 0.9)
     warnings.push("Very high compression — verify critical details survived.");
-  if (similarity < 0.8)
-    warnings.push("Semantic similarity below 80% — consider a higher-quality goal.");
+  if (entityRetention < 0.6)
+    warnings.push(
+      `Only ${Math.round(
+        entityRetention * 100,
+      )}% of key entities/numbers were found in the output — check nothing important was dropped.`,
+    );
+  if (retention < 0.4)
+    warnings.push(
+      "Under 40% of the original's distinct words remain — this is a heavy rewrite.",
+    );
 
   return {
     semanticSimilarity: similarity,
     informationRetention: retention,
     entityRetention,
     confidence,
-    accepted: similarity >= 0.7,
+    accepted: entityRetention >= 0.6 && retention >= 0.35,
     warnings,
     fallbacksUsed: [],
   };
+}
+
+/**
+ * Per-goal ceiling for closed-loop budget escalation. "highest_quality" returns
+ * its own base (== no escalation): when a user explicitly asked for maximum
+ * fidelity we won't silently shred it to hit a number — we warn instead. The
+ * cost/size goals may push all the way to maximum.
+ */
+function escalationCeiling(goal: OptimizationGoal): number {
+  switch (goal) {
+    case "highest_quality":
+      return defaultAggressiveness("highest_quality");
+    case "fastest":
+      return 0.85;
+    case "balanced":
+      return 0.9;
+    case "lowest_cost":
+      return 1;
+    case "max_compression":
+      return 1;
+    default:
+      return assertNever(goal);
+  }
+}
+
+/**
+ * Run the planned stages once, headlessly (no naps, no callbacks), and return
+ * the measured token count. `aggFloor` raises every stage's aggressiveness to at
+ * least that value — this is the single knob the budget search turns. `0` leaves
+ * each stage at its own planned/goal default.
+ */
+function measurePipeline(
+  input: string,
+  stages: PlannedStage[],
+  classification: ClassificationResult,
+  goal: OptimizationGoal,
+  targetBudget: number,
+  aggFloor: number,
+): number {
+  let text = input;
+  for (const planned of stages) {
+    const plugin = getPlugin(planned.pluginId);
+    if (!plugin) continue;
+    const aggressiveness = Math.max(
+      planned.aggressiveness ?? defaultAggressiveness(goal),
+      aggFloor,
+    );
+    try {
+      text = plugin.compress({
+        text,
+        classification,
+        goal,
+        targetBudget,
+        config: { aggressiveness, similarityThreshold: 0.8, enabled: true },
+      }).text;
+    } catch {
+      // A failing stage is a no-op here; the animated pass reports the failure.
+    }
+  }
+  return countTokens(text);
+}
+
+interface BudgetFit {
+  /** Aggressiveness floor to apply to the animated pass (0 = no escalation). */
+  floor: number;
+  /** Whether the budget is actually reachable at this goal's ceiling. */
+  met: boolean;
+  /** Measured token count at the chosen floor. */
+  projectedTokens: number;
+}
+
+/**
+ * Closed-loop budget fit. Binary-searches the SMALLEST aggressiveness floor in
+ * [base, ceiling] whose measured output fits `targetBudget`, so we compress
+ * exactly as much as the budget demands and no more (preserving fidelity). This
+ * closes the loop the planner only ever *projected*: it checks the real measured
+ * token count, not an estimate.
+ *
+ * Example: budget 4,000; a balanced plan lands at 6,200 tokens at its 0.55
+ * default. The search finds that a 0.78 floor lands at 3,950 while 0.70 still
+ * overshoots at 4,300 — so it returns floor ≈ 0.78, and the animated run uses
+ * that, ending exactly where the search predicted.
+ */
+function fitToBudget(
+  input: string,
+  plan: PlanResult,
+  classification: ClassificationResult,
+  goal: OptimizationGoal,
+  targetBudget: number,
+): BudgetFit {
+  const base = defaultAggressiveness(goal);
+  const ceiling = escalationCeiling(goal);
+
+  // Already within budget at base, or no headroom to escalate → leave as planned.
+  const baseline = measurePipeline(input, plan.stages, classification, goal, targetBudget, 0);
+  if (baseline <= targetBudget || ceiling <= base) {
+    return { floor: 0, met: baseline <= targetBudget, projectedTokens: baseline };
+  }
+
+  // Even maximum effort can't fit it → report the unreachable floor honestly.
+  const maxed = measurePipeline(input, plan.stages, classification, goal, targetBudget, ceiling);
+  if (maxed > targetBudget) {
+    return { floor: ceiling, met: false, projectedTokens: maxed };
+  }
+
+  let lo = base;
+  let hi = ceiling;
+  let bestFloor = ceiling;
+  let bestTokens = maxed;
+  for (let i = 0; i < 7; i++) {
+    const mid = (lo + hi) / 2;
+    const tokens = measurePipeline(input, plan.stages, classification, goal, targetBudget, mid);
+    if (tokens <= targetBudget) {
+      bestFloor = mid;
+      bestTokens = tokens;
+      hi = mid;
+    } else {
+      lo = mid;
+    }
+  }
+  return { floor: bestFloor, met: true, projectedTokens: bestTokens };
 }
 
 /**
@@ -127,6 +290,11 @@ export async function runOptimization(
   callbacks: RunCallbacks = {},
 ): Promise<OptimizationResult> {
   const { input, goal, targetBudget } = options;
+  // Staged delays are pure presentation — the real compute is sub-millisecond.
+  // `pace` scales every nap: 1 = full animation, 0 = instant (Animations off or
+  // reduced-motion), so the tweak → rerun loop isn't gated on fake latency.
+  const pace = Math.max(0, options.pace ?? 1);
+  const nap = (ms: number) => sleep(Math.round(ms * pace));
   const phases = initialPhases();
   const emitPhases = () => callbacks.onPhases?.(phases.map((p) => ({ ...p })));
   const setPhase = (id: PhaseId, patch: Partial<PipelinePhase>) => {
@@ -142,7 +310,7 @@ export async function runOptimization(
 
   // 1. Analysis
   setPhase("analysis", { status: "running" });
-  await sleep(380);
+  await nap(380);
   const classification: ClassificationResult = classify(input, options.contentTypeOverride);
   const originalTokens = classification.stats.tokens;
   setPhase("analysis", {
@@ -160,7 +328,7 @@ export async function runOptimization(
 
   // 2. Classification
   setPhase("classification", { status: "running" });
-  await sleep(420);
+  await nap(420);
   setPhase("classification", {
     status: "completed",
     detail: `${TYPE_LABELS[classification.primary]} · ${Math.round(
@@ -176,7 +344,7 @@ export async function runOptimization(
 
   // 3. Planning
   setPhase("planning", { status: "running" });
-  await sleep(420);
+  await nap(420);
   const isManual = options.manualPlan !== undefined;
   const plan = isManual
     ? buildManualPlan(options.manualPlan!, goal, targetBudget)
@@ -200,6 +368,30 @@ export async function runOptimization(
     }`,
   );
 
+  // Closed-loop budget enforcement (auto plans only — a manual pipeline's
+  // per-stage aggressiveness is the user's explicit instruction, so we never
+  // override it). We search headlessly for the gentlest aggressiveness that
+  // fits the budget, then run the ANIMATED pass at that floor, so the streamed
+  // per-stage breakdown equals the final result the search predicted.
+  let aggFloor = 0;
+  if (!isManual && plan.stages.length > 0) {
+    const fit = fitToBudget(input, plan, classification, goal, targetBudget);
+    aggFloor = fit.floor;
+    if (aggFloor > 0 && fit.met) {
+      log(
+        "info",
+        `Tightened compression to fit the ${formatCompact(targetBudget)}-token budget.`,
+      );
+    } else if (!fit.met) {
+      log(
+        "warn",
+        `${formatCompact(targetBudget)}-token budget is below this goal's floor (~${formatCompact(
+          fit.projectedTokens,
+        )}).`,
+      );
+    }
+  }
+
   // 4. Compression
   setPhase("compression", { status: "running" });
   const stages: StageResult[] = [];
@@ -220,10 +412,12 @@ export async function runOptimization(
     const slow =
       plugin.metadata.category === "summarization" ||
       plugin.metadata.category === "retrieval";
-    await sleep(stageDelay(currentTokens, slow));
+    await nap(stageDelay(currentTokens, slow));
 
     const config: PluginConfig = {
-      aggressiveness: planned.aggressiveness ?? defaultAggressiveness(goal),
+      // Raise each stage to the budget-fit floor when the closed loop escalated
+      // (aggFloor > 0); otherwise honor the stage's own planned/goal default.
+      aggressiveness: Math.max(planned.aggressiveness ?? defaultAggressiveness(goal), aggFloor),
       similarityThreshold: 0.8,
       enabled: true,
     };
@@ -299,25 +493,38 @@ export async function runOptimization(
 
   // 5. Validation
   setPhase("validation", { status: "running" });
-  await sleep(480);
-  const validation = validate(input, currentText, stages);
+  await nap(480);
+  const validation = validate(input, currentText);
+  // Honest budget reporting: if the measured output still exceeds the target
+  // (beyond a small tolerance), say so plainly instead of quietly missing it.
+  if (currentTokens > targetBudget * 1.02) {
+    validation.warnings.push(
+      isManual
+        ? `Output is ${formatCompact(currentTokens)} tokens, above your ${formatCompact(
+            targetBudget,
+          )}-token budget — raise a stage's aggressiveness or add one.`
+        : `Couldn't reach the ${formatCompact(targetBudget)}-token budget; ~${formatCompact(
+            currentTokens,
+          )} tokens is the floor for this goal. Try Max compression or a larger budget.`,
+    );
+  }
   setPhase("validation", {
     status: validation.accepted ? "completed" : "failed",
-    detail: `${(validation.semanticSimilarity * 100).toFixed(1)}% similar`,
+    detail: `${(validation.semanticSimilarity * 100).toFixed(1)}% word overlap`,
   });
   log(
     validation.accepted ? "success" : "warn",
     `Validation ${validation.accepted ? "passed" : "flagged"} — ${(
       validation.semanticSimilarity * 100
-    ).toFixed(1)}% similarity, ${Math.round(
+    ).toFixed(1)}% word overlap, ${Math.round(
       validation.informationRetention * 100,
-    )}% info retained`,
+    )}% of terms retained`,
   );
   for (const w of validation.warnings) log("warn", w);
 
   // 6. Final assembly
   setPhase("assembly", { status: "running" });
-  await sleep(280);
+  await nap(280);
   const optimizedTokens = currentTokens;
   const result: OptimizationResult = {
     id: crypto.randomUUID(),
@@ -332,8 +539,8 @@ export async function runOptimization(
     stages,
     validation,
     totalDurationMs: stages.reduce((a, s) => a + s.durationMs, 0),
-    budgetBefore: buildBudgetBefore(classification, originalTokens),
-    budgetAfter: buildBudgetAfter(classification, optimizedTokens),
+    budgetBefore: buildBudgetBefore(input),
+    budgetAfter: buildBudgetAfter(currentText),
     createdAt: Date.now(),
   };
   setPhase("assembly", { status: "completed", detail: `${formatCompact(optimizedTokens)} tokens` });

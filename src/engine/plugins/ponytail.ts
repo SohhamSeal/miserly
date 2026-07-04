@@ -7,14 +7,17 @@ export default definePlugin(
     name: "Ponytail",
     description:
       "Lazy-senior-dev code reducer. Strips comments and ceremony and keeps the one line that matters — best on verbose source files.",
-    author: "DietrichGebert",
+    author: "miserly",
     version: "4.x",
     category: "code",
     capabilities: ["comment strip", "ceremony removal", "whitespace squeeze"],
     supportedTypes: ["code", "mixed"],
     ratioRange: [0.5, 0.75],
-    real: true,
-    homepage: "https://github.com/DietrichGebert/ponytail",
+    provenance: "reference-sim",
+    inspiredBy: {
+      name: "ponytail by DietrichGebert",
+      url: "https://github.com/DietrichGebert/ponytail",
+    },
     accent: "amber",
   },
   (args) => {

@@ -1,6 +1,7 @@
 import { AlertTriangle, Coins } from "lucide-react";
 import { useStudioStore } from "@/store/useStudioStore";
-import { MODELS, compareCost, formatUSD, getModel } from "@/engine";
+import { useFeatureEnabled } from "@/store/useSettingsStore";
+import { MODELS, compareCost, countTokens, formatUSD, getModel } from "@/engine";
 import {
   formatCompact,
   formatMs,
@@ -33,17 +34,35 @@ export function ReportCard() {
   const result = useStudioStore((s) => s.result);
   const modelId = useStudioStore((s) => s.modelId);
   const setModelId = useStudioStore((s) => s.setModelId);
+  const editedOutput = useStudioStore((s) => s.editedOutput);
+  // All hooks must run before any early return (Rules of Hooks).
+  const accurate = useFeatureEnabled("accurateTokenizer");
 
   if (!result) return null;
 
+  // Size + cost are recomputed from the edited output when the user changed it,
+  // so the report never disagrees with what's on screen. Quality metrics
+  // (retention / overlap) still describe the engine's optimization, not the edit.
+  const isEdited = editedOutput !== null && editedOutput !== result.outputText;
+  const optimizedTokens =
+    editedOutput !== null && editedOutput !== result.outputText
+      ? countTokens(editedOutput)
+      : result.optimizedTokens;
+
   const model = getModel(modelId);
-  const cost = compareCost(result.originalTokens, result.optimizedTokens, model);
-  const ratio = result.originalTokens > 0 ? result.optimizedTokens / result.originalTokens : 1;
+  const cost = compareCost(result.originalTokens, optimizedTokens, model);
+  const ratio = result.originalTokens > 0 ? optimizedTokens / result.originalTokens : 1;
   const reductionPct = 1 - ratio;
   const tokensSaved = cost.beforeTokens - cost.afterTokens;
   const latency = reductionPct * 0.85;
   const rating = qualityRating(result.validation.confidence);
   const { classification, validation, plan } = result;
+  const increased = cost.saved < 0;
+  // Prefix token counts with "~" when the exact tokenizer is off.
+  const tk = (n: number) => (accurate ? "" : "~") + formatNumber(n);
+  const estNote = accurate
+    ? ""
+    : " (estimated ~4 chars/token — enable the accurate tokenizer in Settings for exact counts)";
 
   return (
     <CollapsibleCard
@@ -52,8 +71,21 @@ export function ReportCard() {
       hint="A full breakdown of what miserly did and what it saves you. Switch the model to recompute costs instantly."
       summary={
         <>
-          <span className="font-medium text-success">{formatPct(reductionPct)}</span> smaller · saves{" "}
-          <span className="font-medium text-success">{formatUSD(cost.saved)}</span>
+          <span className={cn("font-medium", reductionPct < 0 ? "text-destructive" : "text-success")}>
+            {formatPct(Math.abs(reductionPct))}
+          </span>{" "}
+          {reductionPct < 0 ? "larger" : "smaller"} ·{" "}
+          {increased ? (
+            <>
+              costs{" "}
+              <span className="font-medium text-destructive">{formatUSD(Math.abs(cost.saved))}</span>{" "}
+              more
+            </>
+          ) : (
+            <>
+              saves <span className="font-medium text-success">{formatUSD(cost.saved)}</span>
+            </>
+          )}
         </>
       }
       right={
@@ -100,6 +132,14 @@ export function ReportCard() {
             <span className="capitalize text-muted-foreground">
               {classification.complexity} complexity
             </span>
+            {isEdited ? (
+              <>
+                <span className="text-muted-foreground">·</span>
+                <span className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning">
+                  size &amp; cost reflect your edits
+                </span>
+              </>
+            ) : null}
           </div>
         </Tip>
 
@@ -107,16 +147,16 @@ export function ReportCard() {
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
           <MetricTile
             label="Original"
-            value={formatNumber(cost.beforeTokens)}
+            value={tk(cost.beforeTokens)}
             sub="tokens"
-            hint={`Input size as ${model.label} would count it.`}
+            hint={`Input size as ${model.label} would count it.${estNote}`}
           />
           <MetricTile
             label="Optimized"
-            value={formatNumber(cost.afterTokens)}
+            value={tk(cost.afterTokens)}
             sub="tokens"
             valueClassName="text-primary"
-            hint="Final token count after the full pipeline."
+            hint={`Final token count after the full pipeline.${estNote}`}
           />
           <MetricTile
             label="Ratio"
@@ -127,13 +167,13 @@ export function ReportCard() {
           <MetricTile
             label="Reduction"
             value={formatPct(reductionPct)}
-            valueClassName="text-success"
+            valueClassName={reductionPct < 0 ? "text-destructive" : "text-success"}
             hint="Percentage of tokens removed."
           />
           <MetricTile
             label="Tokens saved"
-            value={formatNumber(tokensSaved)}
-            hint="Original minus optimized tokens."
+            value={tk(tokensSaved)}
+            hint={`Original minus optimized tokens.${estNote}`}
           />
           <MetricTile
             label="Cost before"
@@ -143,15 +183,19 @@ export function ReportCard() {
           <MetricTile
             label="Cost after"
             value={formatUSD(cost.afterCost)}
-            valueClassName="text-success"
+            valueClassName={increased ? undefined : "text-success"}
             hint="Input cost of the optimized context at the same pricing."
           />
           <MetricTile
-            label="You save"
-            value={formatUSD(cost.saved)}
-            sub={`${formatPct(cost.savedPct)} cheaper`}
-            valueClassName="text-success"
-            hint="Savings per call. Multiply by your call volume for the real impact."
+            label={increased ? "Costs more" : "You save"}
+            value={`${increased ? "+" : ""}${formatUSD(Math.abs(cost.saved))}`}
+            sub={`${formatPct(Math.abs(cost.savedPct))} ${increased ? "more expensive" : "cheaper"}`}
+            valueClassName={increased ? "text-destructive" : "text-success"}
+            hint={
+              increased
+                ? "This pipeline made the context larger, so it costs more, not less."
+                : "Savings per call. Multiply by your call volume for the real impact."
+            }
           />
           <MetricTile
             label="Latency"
@@ -167,12 +211,12 @@ export function ReportCard() {
           <MetricTile
             label="Retention"
             value={formatPct(validation.informationRetention)}
-            hint="Estimated share of important information preserved."
+            hint="Measured: share of the original's distinct words still present in the output."
           />
           <MetricTile
-            label="Similarity"
+            label="Word overlap"
             value={formatPct(validation.semanticSimilarity)}
-            hint="Estimated semantic similarity between original and optimized text."
+            hint="Measured lexical overlap (shared words) with the original — a real figure, not a semantic-model score. It naturally drops as compression rises."
           />
         </div>
 
@@ -186,7 +230,7 @@ export function ReportCard() {
           <MetricTile
             label="Confidence"
             value={formatPct(validation.confidence)}
-            hint="Blended score across similarity, retention and per-stage quality."
+            hint="Blended score across entity retention, word retention and lexical overlap."
           />
           <MetricTile
             label="Validation"
@@ -195,7 +239,7 @@ export function ReportCard() {
                 {validation.accepted ? "Accepted" : "Flagged"}
               </span>
             }
-            hint="Whether the result passed the similarity threshold."
+            hint="Whether key entities and enough of the original wording survived."
           />
         </div>
 

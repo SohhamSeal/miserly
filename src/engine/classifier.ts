@@ -1,5 +1,6 @@
 import { clamp } from "@/lib/utils";
 import { countTokens } from "./tokenizer";
+import { lineType } from "./segmenter";
 import { countDuplicateLines } from "./transforms";
 import { TYPE_LABELS } from "./labels";
 import type {
@@ -8,8 +9,6 @@ import type {
   DetectedType,
   DocumentStats,
 } from "./types";
-
-const FRAME_RE = /^\s*(at\s+\S|File\s+".*",\s*line\s+\d+|\.{3}\s|Caused by:|\tat\s)/;
 
 export function computeStats(text: string): DocumentStats {
   const lines = text.split("\n");
@@ -28,32 +27,19 @@ export function computeStats(text: string): DocumentStats {
   };
 }
 
-/** Assign a single dominant content type to a line (priority-ordered). */
-function lineType(raw: string): ContentType | null {
-  const l = raw.trim();
-  if (l === "") return null;
-  if (FRAME_RE.test(raw)) return "stacktrace";
-  if (/"\w[\w-]*"\s*:/.test(l) && /[{}]/.test(l)) return "json";
-  if ((l.startsWith("{") && l.endsWith("}")) || (l.startsWith("[") && l.endsWith("]")))
-    return "json";
-  if (/\b(SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM|CREATE\s+TABLE|ALTER\s+TABLE)\b/i.test(raw))
-    return "sql";
-  if (/^(#{1,6}\s|[-*+]\s|\d+\.\s|>\s|```|\|)/.test(l) || /\[[^\]]+\]\([^)]+\)/.test(l))
-    return "markdown";
-  if (/^(user|assistant|system|human|ai|bot)\b\s*[:>\-]/i.test(l)) return "chat";
-  if (
-    /(=>|;\s*$|\bfunction\b|\bconst\b|\blet\b|\bclass\b|\bdef\b|\bimport\b|\bexport\b|\breturn\b|\bpublic\b|\bprivate\b|#include|\bfn\b)/.test(
-      raw,
-    )
-  )
-    return "code";
-  if (
-    /\b(\d{4}-\d{2}-\d{2}|\d{2}:\d{2}:\d{2})\b/.test(l) ||
-    /\b(INFO|WARN|WARNING|ERROR|DEBUG|TRACE|FATAL)\b/.test(l) ||
-    /^\[\d{2,4}[-/]/.test(l)
-  )
-    return "logs";
-  return "prose";
+/**
+ * Measured token count per content type: classify each line and sum its real
+ * token count. Used to build the budget charts from the actual text (before AND
+ * after optimization) instead of guessing from input line-share.
+ */
+export function tokenDistributionByType(text: string): Map<ContentType, number> {
+  const dist = new Map<ContentType, number>();
+  for (const raw of text.split("\n")) {
+    const t = lineType(raw);
+    if (!t) continue;
+    dist.set(t, (dist.get(t) ?? 0) + countTokens(raw));
+  }
+  return dist;
 }
 
 function detectProgLang(text: string): string | null {
@@ -84,6 +70,32 @@ export function classify(
       complexity: complexityFor(stats, 1),
       stats,
     };
+  }
+
+  // Whole-document probe: pretty-printed JSON puts each key on its own line, so
+  // the per-line voting below (which needs a key AND a brace on the same line)
+  // would mislabel an entire JSON file as prose — and route it straight into the
+  // prose compressors. A real parse catches that up front.
+  const trimmed = text.trim();
+  if (
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+  ) {
+    try {
+      JSON.parse(trimmed);
+      return {
+        primary: "json",
+        secondary: null,
+        detected: [{ type: "json", share: 1, confidence: 0.98 }],
+        confidence: 0.98,
+        reasons: ["Valid JSON document"],
+        language: "JSON",
+        complexity: complexityFor(stats, 1),
+        stats,
+      };
+    } catch {
+      // Not valid JSON — fall through to per-line classification.
+    }
   }
 
   const lines = text.split("\n");

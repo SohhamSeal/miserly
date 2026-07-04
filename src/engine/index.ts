@@ -15,10 +15,12 @@ export {
   DEFAULT_MODEL_ID,
   getModel,
   contextCost,
+  cacheReadCost,
   compareCost,
+  analyzeCache,
   formatUSD,
 } from "./pricing";
-export type { CostComparison } from "./pricing";
+export type { CostComparison, CacheAnalysis } from "./pricing";
 export {
   countTokens,
   countTokensForModel,

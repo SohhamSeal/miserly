@@ -12,13 +12,14 @@ export default definePlugin(
     name: "Toonify",
     description:
       "Converts repetitive structured blocks into a compact, token-efficient form (TOON-style) and collapses recurring traces and duplicate records.",
-    author: "community",
+    author: "miserly",
     version: "0.4",
     category: "structural",
     capabilities: ["structured rewrite", "global dedup", "trace collapse"],
     supportedTypes: ["json", "logs", "stacktrace", "mixed"],
     ratioRange: [0.45, 0.7],
-    real: false,
+    provenance: "reference-sim",
+    inspiredBy: { name: "TOON (Token-Oriented Object Notation)" },
     accent: "sky",
   },
   (args) => {

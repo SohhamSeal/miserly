@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowRight, Check, Copy, Download, Maximize2, RotateCcw } from "lucide-react";
 import { countTokens } from "@/engine";
 import { useStudioStore } from "@/store/useStudioStore";
+import { useFeatureEnabled } from "@/store/useSettingsStore";
 import { formatNumber } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tip } from "@/components/ui/tooltip";
@@ -54,14 +56,13 @@ function CopyButton({ text }: { text: string }) {
 
 export function OutputPanel() {
   const result = useStudioStore((s) => s.result);
+  // Edits live in the store (not local state) so the report / cost / budget
+  // cards recompute from the same edited text. The store resets it to `null`
+  // on every new run / sample / history restore, so no local effect is needed.
+  const edited = useStudioStore((s) => s.editedOutput);
+  const setEdited = useStudioStore((s) => s.setEditedOutput);
+  const accurate = useFeatureEnabled("accurateTokenizer");
   const [wrap, setWrap] = useState(false);
-  // `null` => showing the engine's output untouched. A string => user's edits.
-  const [edited, setEdited] = useState<string | null>(null);
-
-  // Discard manual edits whenever a different run loads (new optimize / restore).
-  useEffect(() => {
-    setEdited(null);
-  }, [result?.id]);
 
   const outText = edited ?? result?.outputText ?? "";
   const isEdited = edited !== null && edited !== result?.outputText;
@@ -69,7 +70,8 @@ export function OutputPanel() {
   // Token count + reduction track the edited text so the numbers stay honest.
   const optimizedTokens = useMemo(
     () => (edited === null ? result?.optimizedTokens ?? 0 : countTokens(edited)),
-    [edited, result?.optimizedTokens],
+    // `accurate` is a dep so an edited count recomputes when the tokenizer toggles.
+    [edited, result?.optimizedTokens, accurate],
   );
 
   if (!result) return null;
@@ -78,6 +80,9 @@ export function OutputPanel() {
     result.originalTokens > 0
       ? Math.round((1 - optimizedTokens / result.originalTokens) * 100)
       : 0;
+  // Negative reduction = the edited output is LARGER than the input. Render it
+  // as a red "+N%" instead of the nonsensical green "−-N%".
+  const grew = reduction < 0;
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
@@ -86,17 +91,29 @@ export function OutputPanel() {
           Optimized output
         </SectionTitle>
         <div className="flex items-center gap-3">
-          <Tip content="Original tokens → optimized tokens. Updates live as you edit.">
+          <Tip
+            content={
+              accurate
+                ? "Original tokens → optimized tokens. Updates live as you edit."
+                : "Original → optimized tokens (estimated ~4 chars/token). Updates live as you edit."
+            }
+          >
             <div className="flex items-center gap-2 font-mono text-sm tabular-nums">
               <span className="text-muted-foreground line-through decoration-muted-foreground/40">
-                {formatNumber(result.originalTokens)}
+                {(accurate ? "" : "~") + formatNumber(result.originalTokens)}
               </span>
               <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="font-semibold text-foreground">
-                {formatNumber(optimizedTokens)}
+                {(accurate ? "" : "~") + formatNumber(optimizedTokens)}
               </span>
-              <span className="rounded bg-success/15 px-1.5 py-0.5 text-xs text-success">
-                −{reduction}%
+              <span
+                className={cn(
+                  "rounded px-1.5 py-0.5 text-xs",
+                  grew ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success",
+                )}
+              >
+                {grew ? "+" : "−"}
+                {Math.abs(reduction)}%
               </span>
             </div>
           </Tip>

@@ -7,14 +7,17 @@ export default definePlugin(
     name: "LLMLingua",
     description:
       "Token-level prompt compression. Drops low-information tokens from prose and chat while preserving the meaning a model needs.",
-    author: "Microsoft Research",
+    author: "miserly",
     version: "1.x",
     category: "semantic",
     capabilities: ["token pruning", "perplexity-guided drop"],
     supportedTypes: ["prose", "chat", "markdown", "mixed", "rag"],
     ratioRange: [0.25, 0.5],
-    real: false,
-    homepage: "https://github.com/microsoft/LLMLingua",
+    provenance: "reference-sim",
+    inspiredBy: {
+      name: "LLMLingua (Microsoft Research)",
+      url: "https://github.com/microsoft/LLMLingua",
+    },
     accent: "violet",
   },
   (args) => {

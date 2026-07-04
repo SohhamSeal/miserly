@@ -7,14 +7,17 @@ export default definePlugin(
     name: "LongLLMLingua",
     description:
       "Long-context, question-aware compression. Reorders and prunes large documents and RAG passages to keep what answers the query.",
-    author: "Microsoft Research",
+    author: "miserly",
     version: "1.x",
     category: "semantic",
     capabilities: ["long-context pruning", "question-aware", "token drop"],
     supportedTypes: ["rag", "knowledge", "prose", "mixed", "chat"],
     ratioRange: [0.18, 0.4],
-    real: false,
-    homepage: "https://github.com/microsoft/LLMLingua",
+    provenance: "reference-sim",
+    inspiredBy: {
+      name: "LongLLMLingua (Microsoft Research)",
+      url: "https://github.com/microsoft/LLMLingua",
+    },
     accent: "fuchsia",
   },
   (args) => {

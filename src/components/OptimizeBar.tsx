@@ -1,7 +1,8 @@
-import { Gauge, Loader2, Sparkles, Target } from "lucide-react";
+import { Gauge, Loader2, Sparkles, Target, X } from "lucide-react";
 import { useStudioStore } from "@/store/useStudioStore";
 import { GOAL_LABELS, GOAL_HINTS, type OptimizationGoal } from "@/engine";
 import { formatCompact } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Tip } from "@/components/ui/tooltip";
 import {
@@ -32,6 +33,7 @@ export function OptimizeBar() {
   const setGoal = useStudioStore((s) => s.setGoal);
   const setTargetBudget = useStudioStore((s) => s.setTargetBudget);
   const optimize = useStudioStore((s) => s.optimize);
+  const cancel = useStudioStore((s) => s.cancel);
 
   const isRunning = status === "running";
   const isEmpty = input.trim() === "";
@@ -51,7 +53,15 @@ export function OptimizeBar() {
             size="lg"
             onClick={() => void optimize()}
             disabled={isRunning || isEmpty}
-            className="h-12 w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-base font-semibold text-white shadow-lg shadow-indigo-900/30 hover:from-indigo-500 hover:to-violet-500 disabled:from-secondary disabled:to-secondary disabled:text-muted-foreground"
+            className={cn(
+              "h-12 w-full text-base font-semibold shadow-lg transition-colors disabled:opacity-100",
+              isEmpty && !isRunning
+                ? // Empty state: keep the CTA clearly visible (bordered, muted)
+                  // rather than blending into the page background — that's exactly
+                  // when a first-time user needs to spot the endpoint.
+                  "border border-border bg-secondary text-muted-foreground shadow-none"
+                : "bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-indigo-900/30 hover:from-indigo-500 hover:to-violet-500",
+            )}
           >
             {isRunning ? (
               <>
@@ -73,7 +83,15 @@ export function OptimizeBar() {
         </span>
       </Tip>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {isRunning ? (
+          <Tip content="Stop this run and keep the previous result.">
+            <Button variant="outline" size="lg" className="h-12" onClick={() => cancel()}>
+              <X className="h-4 w-4" />
+              Cancel
+            </Button>
+          </Tip>
+        ) : null}
         <Tip content={`Optimization goal — ${GOAL_HINTS[goal]}`}>
           <div className="w-[180px]">
             <Select

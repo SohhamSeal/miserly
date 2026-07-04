@@ -54,6 +54,19 @@ export function defaultAggressiveness(goal: OptimizationGoal): number {
   }
 }
 
+/**
+ * Map an aggressiveness (0..1) to a keep-ratio inside [min, max]. Higher
+ * aggressiveness keeps less (smaller output). Lets the Pipeline Builder slider
+ * actually drive the summarization / retrieval plugins.
+ */
+export function aggressivenessKeep(
+  range: [number, number],
+  aggressiveness: number,
+): number {
+  const [min, max] = range;
+  return clamp(max - (max - min) * clamp(aggressiveness, 0, 1), min, max);
+}
+
 /** Run a sequence of transforms, collecting their notes. */
 export function compose(
   text: string,

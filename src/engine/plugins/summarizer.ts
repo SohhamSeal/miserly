@@ -1,5 +1,5 @@
 import { collapseWhitespace, extractiveSummary } from "../transforms";
-import { compose, definePlugin, goalRatio, qualityOf } from "./_base";
+import { aggressivenessKeep, compose, definePlugin, qualityOf } from "./_base";
 
 const RANGE: [number, number] = [0.2, 0.45];
 
@@ -15,15 +15,16 @@ export default definePlugin(
     capabilities: ["extractive summary", "general purpose"],
     supportedTypes: ["prose", "markdown", "chat", "knowledge", "mixed"],
     ratioRange: RANGE,
-    real: false,
+    provenance: "native",
     accent: "slate",
   },
   (args) => {
-    const keep = goalRatio(RANGE, args.goal);
+    const a = args.config.aggressiveness;
+    const keep = aggressivenessKeep(RANGE, a);
     const { text, notes } = compose(args.text, [
       (t) => extractiveSummary(t, keep),
       collapseWhitespace,
     ]);
-    return { text, notes, qualityScore: qualityOf(0.86, args.config.aggressiveness) };
+    return { text, notes, qualityScore: qualityOf(0.86, a) };
   },
 );

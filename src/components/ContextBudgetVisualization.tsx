@@ -2,6 +2,7 @@ import { useStudioStore } from "@/store/useStudioStore";
 import { accent } from "@/lib/accent";
 import { formatNumber, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { buildBudgetAfter } from "@/engine/budget";
 import type { BudgetSegment } from "@/engine";
 import { Tip } from "@/components/ui/tooltip";
 import { CollapsibleCard } from "@/components/CollapsibleCard";
@@ -49,9 +50,16 @@ function Allocation({
 
 export function ContextBudgetVisualization() {
   const result = useStudioStore((s) => s.result);
+  const editedOutput = useStudioStore((s) => s.editedOutput);
   if (!result) return null;
 
-  const afterTotal = result.budgetAfter.reduce((a, s) => a + s.tokens, 0);
+  // Recompute the "after" split from the edited output when it differs, so the
+  // budget card agrees with the report and cost tiles.
+  const budgetAfter =
+    editedOutput !== null && editedOutput !== result.outputText
+      ? buildBudgetAfter(editedOutput)
+      : result.budgetAfter;
+  const afterTotal = budgetAfter.reduce((a, s) => a + s.tokens, 0);
 
   return (
     <CollapsibleCard
@@ -71,7 +79,7 @@ export function ContextBudgetVisualization() {
       />
       <Allocation
         title="After"
-        segments={result.budgetAfter}
+        segments={budgetAfter}
         hint="What kinds of information survived into the optimized output."
       />
     </CollapsibleCard>

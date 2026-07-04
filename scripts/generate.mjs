@@ -24,6 +24,7 @@
 // -----------------------------------------------------------------------------
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { FEATURES, getFeature } from "./features.config.mjs";
 import { ensureDir, featurePackagesInstalled, paths } from "./lib.mjs";
 
@@ -183,8 +184,11 @@ export function generate({ log = () => {} } = {}) {
   return availability;
 }
 
-// Run directly: `node scripts/generate.mjs`
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Run directly: `node scripts/generate.mjs`. Build the comparison URL with
+// pathToFileURL so this also matches on Windows and on paths containing spaces —
+// a naive `file://${process.argv[1]}` would not match there, silently skipping
+// generation and breaking `npm run dev` on a fresh clone.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const availability = generate({ log: (m) => console.log(m) });
   const on = Object.entries(availability)
     .filter(([, v]) => v)

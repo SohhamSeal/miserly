@@ -13,14 +13,17 @@ export default definePlugin(
     name: "Headroom",
     description:
       "Structural compressor for tool outputs, logs, JSON and code. Normalizes high-entropy noise, dedups, minifies JSON and trims stack traces — losslessly reversible in the real engine.",
-    author: "chopratejas",
+    author: "miserly",
     version: "2.x",
     category: "structural",
     capabilities: ["JSON minify", "line dedup", "stack-trace trim", "noise normalize"],
     supportedTypes: ["logs", "json", "code", "stacktrace", "sql", "mixed"],
     ratioRange: [0.28, 0.5],
-    real: true,
-    homepage: "https://github.com/chopratejas/headroom",
+    provenance: "reference-sim",
+    inspiredBy: {
+      name: "headroom by chopratejas",
+      url: "https://github.com/chopratejas/headroom",
+    },
     accent: "indigo",
   },
   (args) => {

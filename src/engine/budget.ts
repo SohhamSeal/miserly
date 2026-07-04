@@ -1,20 +1,23 @@
+import { tokenDistributionByType } from "./classifier";
 import { TYPE_ACCENT, TYPE_LABELS } from "./labels";
-import type { BudgetSegment, ClassificationResult, ContentType } from "./types";
+import { countTokens } from "./tokenizer";
+import type { BudgetSegment, ContentType } from "./types";
 
-/** How the input tokens are distributed across detected content types. */
-export function buildBudgetBefore(
-  classification: ClassificationResult,
-  originalTokens: number,
-): BudgetSegment[] {
-  const segments = classification.detected
-    .map((d) => ({
-      label: TYPE_LABELS[d.type],
-      tokens: Math.round(originalTokens * d.share),
-      accent: TYPE_ACCENT[d.type],
+/** How the input tokens are really distributed across content types. */
+export function buildBudgetBefore(text: string): BudgetSegment[] {
+  const dist = tokenDistributionByType(text);
+  const total = countTokens(text) || 1;
+  const distTotal = [...dist.values()].reduce((a, b) => a + b, 0) || 1;
+
+  const segments = [...dist.entries()]
+    .map(([type, tokens]) => ({
+      label: TYPE_LABELS[type],
+      tokens: Math.round((tokens / distTotal) * total),
+      accent: TYPE_ACCENT[type],
     }))
     .filter((s) => s.tokens > 0);
 
-  const threshold = originalTokens * 0.03;
+  const threshold = total * 0.03;
   const big = segments.filter((s) => s.tokens >= threshold);
   const small = segments.filter((s) => s.tokens < threshold);
   const miscTokens = small.reduce((a, s) => a + s.tokens, 0);
@@ -32,26 +35,23 @@ const AFTER_GROUPS: Array<{ label: string; accent: string; from: ContentType[] }
   { label: "Summaries", accent: "violet", from: ["prose", "markdown", "chat", "mixed"] },
 ];
 
-/** What kinds of information survive into the optimized output. */
-export function buildBudgetAfter(
-  classification: ClassificationResult,
-  optimizedTokens: number,
-): BudgetSegment[] {
-  const shareByType = new Map<ContentType, number>();
-  for (const d of classification.detected) shareByType.set(d.type, d.share);
+/** What kinds of information actually survive into the optimized output. */
+export function buildBudgetAfter(text: string): BudgetSegment[] {
+  const dist = tokenDistributionByType(text);
+  const total = countTokens(text) || 1;
+  const distTotal = [...dist.values()].reduce((a, b) => a + b, 0) || 1;
 
   const raw = AFTER_GROUPS.map((g) => ({
     label: g.label,
     accent: g.accent,
-    share: g.from.reduce((acc, t) => acc + (shareByType.get(t) ?? 0), 0),
-  })).filter((g) => g.share > 0);
+    tokens: g.from.reduce((acc, t) => acc + (dist.get(t) ?? 0), 0),
+  })).filter((g) => g.tokens > 0);
 
-  const totalShare = raw.reduce((a, g) => a + g.share, 0) || 1;
   return raw
     .map((g) => ({
       label: g.label,
       accent: g.accent,
-      tokens: Math.round(optimizedTokens * (g.share / totalShare)),
+      tokens: Math.round((g.tokens / distTotal) * total),
     }))
     .filter((s) => s.tokens > 0)
     .sort((a, b) => b.tokens - a.tokens);

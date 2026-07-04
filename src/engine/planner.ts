@@ -87,13 +87,17 @@ export function planPipeline(input: PlanInput): PlanResult {
       const quality = clamp(1 - reduction * 0.5, 0, 1);
       const speed = speedBias(p.metadata.category);
       const compat = p.supports(primary) ? 1 : 0.5;
-      const realBonus = p.metadata.real ? 0.05 : 0;
+      // Prefer an optimizer that truly delegates to a real external package over
+      // a local simulation. Nothing ships as "external" yet, so this is 0 for
+      // every plugin today — but it keeps the tiebreak honest (and ready) for the
+      // moment a real adapter lands, instead of rewarding faux-"real" plugins.
+      const externalBonus = p.metadata.provenance === "external" ? 0.05 : 0;
       const score =
         weights.reduction * reduction +
         weights.quality * quality +
         weights.speed * speed +
         compat * 0.15 +
-        realBonus;
+        externalBonus;
       return { p, score, ratio };
     })
     .sort((a, b) => b.score - a.score);
@@ -134,9 +138,9 @@ export function planPipeline(input: PlanInput): PlanResult {
       ? `Detected ${TYPE_LABELS[primary]} with ${TYPE_LABELS[secondary]} as the dominant content.`
       : `Detected ${TYPE_LABELS[primary]} as the dominant content.`,
     ...chosen.map((c, i) => `${i + 1}. ${c.reason}`),
-    `Projected ≈ ${formatCompact(projected)} tokens after the pipeline (${Math.round(
+    `Rough projection ≈ ${formatCompact(projected)} tokens (${Math.round(
       reductionPct * 100,
-    )}% smaller).`,
+    )}% smaller) — estimated from each optimizer's typical ratio; the real figure is measured after the run.`,
   ];
 
   return {

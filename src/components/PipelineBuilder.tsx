@@ -123,7 +123,7 @@ function StageRow({
   const rowRef = React.useRef<HTMLDivElement>(null);
   if (!plugin) return null;
 
-  const { name, category, real, description, capabilities, supportedTypes, homepage } =
+  const { name, category, provenance, description, capabilities, supportedTypes, inspiredBy } =
     plugin.metadata;
   const compatible = plugin.supports(effectiveType);
   const reductionPct = Math.round((1 - stageRatio(stage.pluginId, stage.aggressiveness)) * 100);
@@ -185,7 +185,25 @@ function StageRow({
           <span className="min-w-0">
             <span className="flex items-center gap-1.5">
               <span className="truncate text-sm font-medium">{name}</span>
-              <Badge variant={real ? "success" : "secondary"}>{real ? "real" : "sim"}</Badge>
+              {provenance === "external" ? (
+                <Tip content="Delegates to a real external optimizer package.">
+                  <Badge variant="success">real</Badge>
+                </Tip>
+              ) : provenance === "native" ? (
+                <Tip content="miserly's own optimizer — not a simulation of an external tool.">
+                  <Badge variant="secondary">native</Badge>
+                </Tip>
+              ) : (
+                <Tip
+                  content={
+                    inspiredBy
+                      ? `A local simulation inspired by ${inspiredBy.name} — it approximates the technique and does not run that project.`
+                      : "A local simulation of this optimization technique — not an external package."
+                  }
+                >
+                  <Badge variant="secondary">sim</Badge>
+                </Tip>
+              )}
               {!compatible ? (
                 <Tip content={`This optimizer doesn't target ${TYPE_LABELS[effectiveType]} content — it may do little here.`}>
                   <span className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
@@ -246,16 +264,18 @@ function StageRow({
                 {supportedTypes.map((t) => TYPE_LABELS[t]).join(", ")}
               </span>
             </span>
-            {homepage ? (
+            {inspiredBy?.url ? (
               <a
-                href={homepage}
+                href={inspiredBy.url}
                 target="_blank"
                 rel="noreferrer"
                 className="text-primary hover:underline"
                 onClick={(e) => e.stopPropagation()}
               >
-                Homepage ↗
+                Inspired by {inspiredBy.name} ↗
               </a>
+            ) : inspiredBy ? (
+              <span>Inspired by {inspiredBy.name}</span>
             ) : null}
           </div>
         </div>

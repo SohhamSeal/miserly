@@ -44,8 +44,25 @@ export interface ModelPricing {
   inputPerM: number;
   /** USD per 1,000,000 output tokens (estimate, editable). */
   outputPerM: number;
+  /**
+   * USD per 1,000,000 tokens for a CACHE READ — a prompt prefix the provider
+   * already has cached from a previous, byte-identical request. Typically
+   * ~10–25% of `inputPerM`. Omitted for models without standard prompt caching
+   * (we don't invent a number for those). Drives the "reused prompt" advisory.
+   */
+  cacheReadPerM?: number;
   contextWindow: number;
   tokenizer: TokenizerFamily;
+  /**
+   * Optional long-context surcharge. Some providers (e.g. Gemini 2.5 Pro) bill
+   * the ENTIRE request at a higher rate once the prompt crosses a token
+   * threshold — not just the tokens above it.
+   */
+  longContext?: {
+    thresholdTokens: number;
+    inputPerM: number;
+    outputPerM: number;
+  };
 }
 
 export type PluginCategory =
@@ -67,12 +84,27 @@ export interface PluginMetadata {
   supportedTypes: ContentType[];
   /** Characteristic output/input token ratio range, e.g. [0.3, 0.6]. */
   ratioRange: [number, number];
-  /** True when this maps to a real, local/external optimizer (vs. illustrative). */
-  real: boolean;
-  homepage?: string;
+  /**
+   * Where this optimizer's behavior actually comes from — the honesty signal the
+   * UI surfaces:
+   *  - "native": miserly's own transform; no outside lineage is claimed.
+   *  - "reference-sim": a LOCAL heuristic *inspired by* published research or an
+   *    existing tool (see `inspiredBy`). It approximates the idea — it is NOT
+   *    that project and does not execute its code.
+   *  - "external": actually delegates to a real external/local optimizer package.
+   */
+  provenance: Provenance;
+  /**
+   * The published work / project this simulation is modeled on. Only meaningful
+   * for "reference-sim" plugins; it credits the lineage WITHOUT impersonating it
+   * (the author stays "miserly" and the badge stays "sim").
+   */
+  inspiredBy?: { name: string; url?: string };
   /** Tailwind color family used for chips/bars, e.g. "indigo". */
   accent: string;
 }
+
+export type Provenance = "native" | "reference-sim" | "external";
 
 export interface PluginConfig {
   /** 0..1 — how hard the optimizer pushes (token target pressure). */
@@ -256,6 +288,14 @@ export interface RunOptions {
    */
   manualPlan?: ManualStage[];
   modelId: string;
+  /**
+   * Presentation pacing for the staged run, 0..1. 1 = full animated stage
+   * delays; 0 = no artificial delay (used when the Animations feature is off or
+   * the user prefers reduced motion). Defaults to full so a headless caller
+   * must opt out explicitly. This is the only spot UI pacing touches the engine
+   * — a proper injected pace callback is a later refactor.
+   */
+  pace?: number;
 }
 
 export interface RunCallbacks {

@@ -1,5 +1,5 @@
 import { collapseWhitespace, dropLowInfoLines, extractiveSummary } from "../transforms";
-import { compose, definePlugin, goalRatio, qualityOf } from "./_base";
+import { aggressivenessKeep, compose, definePlugin, qualityOf } from "./_base";
 
 const RANGE: [number, number] = [0.12, 0.3];
 
@@ -9,22 +9,24 @@ export default definePlugin(
     name: "Nuggets",
     description:
       "Extracts information 'nuggets' — the load-bearing facts, entities and decisions — and discards the connective tissue.",
-    author: "community",
+    author: "miserly",
     version: "0.3",
     category: "retrieval",
     capabilities: ["fact extraction", "salience ranking"],
     supportedTypes: ["knowledge", "rag", "prose", "chat"],
     ratioRange: RANGE,
-    real: false,
+    provenance: "reference-sim",
+    inspiredBy: { name: "information-nugget extraction (community concept)" },
     accent: "emerald",
   },
   (args) => {
-    const keep = goalRatio(RANGE, args.goal);
+    const a = args.config.aggressiveness;
+    const keep = aggressivenessKeep(RANGE, a);
     const { text, notes } = compose(args.text, [
       (t) => extractiveSummary(t, keep),
-      (t) => dropLowInfoLines(t, 0.7),
+      (t) => dropLowInfoLines(t, a),
       collapseWhitespace,
     ]);
-    return { text, notes, qualityScore: qualityOf(0.82, args.config.aggressiveness) };
+    return { text, notes, qualityScore: qualityOf(0.82, a) };
   },
 );
