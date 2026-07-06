@@ -1029,9 +1029,11 @@ const INTEGRATIONS = [
         OpenAI Base URL. Cursor's managed models route through Cursor's servers and cannot be
         redirected.</li>
       </ul>
-      <p><strong>Never touched:</strong> your questions, the model's own words, your API key, and
-      — by default — your system prompt, because compressing a <em>cached</em> system prompt
-      breaks provider prompt-caching and can cost more than it saves.</p>
+      <p><strong>Never touched:</strong> your questions, the model's own words, your API key,
+      injected instruction blocks (the <span class="mono">&lt;system-reminder&gt;</span> notes
+      agents tuck inside messages), and — by default — your system prompt, because compressing a
+      <em>cached</em> system prompt breaks provider prompt-caching and can cost more than it
+      saves.</p>
       <div class="example"><div class="exlabel">The off switch</div>
       Traffic always flows; compression is a live toggle. Turn it off and requests pass through
       byte-for-byte — a wired agent never breaks, and no restarts are ever needed. Settings

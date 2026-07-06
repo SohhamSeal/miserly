@@ -253,6 +253,12 @@ function detectClient(headers, api) {
 async function compressText(text) {
   const tokens = countTokens(text);
   if (tokens < CFG.minTokens) return null;
+  // Injected instruction blocks: Claude Code (and other agents) wrap skill
+  // lists and context updates in <system-reminder> tags INSIDE user messages.
+  // Those are instructions, not data — rewording instructions for a few
+  // percent is a bad trade, so they get the same hands-off policy as system
+  // prompts.
+  if (text.trimStart().startsWith("<system-reminder>")) return null;
   // A demanding budget (half the block, unless the user pinned one) keeps the
   // planner from early-stopping after a single gentle stage on mid-size blocks.
   const targetBudget = CFG.budget ?? Math.ceil(tokens / 2);

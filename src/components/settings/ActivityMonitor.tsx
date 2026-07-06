@@ -130,8 +130,13 @@ function Detail({
   onToggleCapture: (value: boolean) => void;
 }) {
   const [blockIdx, setBlockIdx] = useState(0);
-  // Reset the block selection whenever the chosen request changes.
-  useEffect(() => setBlockIdx(0), [entry?.id]);
+  // When the chosen request changes, default to the CURRENT turn's block —
+  // history blocks ride along first in API order, but "what did my latest
+  // message do" is the question people are asking.
+  useEffect(() => {
+    const current = entry?.blocks.findIndex((b) => !b.label.includes("(history)")) ?? -1;
+    setBlockIdx(current >= 0 ? current : 0);
+  }, [entry?.id, entry?.blocks]);
 
   if (!entry) {
     return (

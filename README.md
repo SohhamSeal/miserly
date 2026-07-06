@@ -306,8 +306,9 @@ OPENAI_BASE_URL=http://localhost:4141/v1 codex         # Codex / Aider
 Chat requests passing through (`/v1/messages` and `/v1/chat/completions`) get
 their **oversized user text and tool blocks** compressed by the same engine the
 studio uses (a 120-record JSONL tool dump becomes one TOON table). Everything
-else — your question, the model's own words, the system prompt, your API key —
-passes through untouched.
+else — your question, the model's own words, the system prompt, injected
+instruction blocks (`<system-reminder>` skill lists and context updates), your
+API key — passes through untouched.
 
 **Turning it on and off — no restarts, nothing breaks.** The proxy always
 passes traffic through; compression is a *live toggle*:
