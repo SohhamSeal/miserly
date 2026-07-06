@@ -25,6 +25,11 @@ is never uploaded anywhere.
 - ⚙️ **Configurable** — a GitHub-style settings panel + environment-variable
   feature flags + an interactive installer.
 
+> 🗺️ **New here?** Open [`docs/product-map.html`](./docs/product-map.html) in any
+> browser (double-click works — it's fully self-contained) for an interactive tour:
+> how it works, every optimizer, the integrations, and a step-by-step
+> getting-started walkthrough from install to uninstall.
+
 ---
 
 ## Table of contents

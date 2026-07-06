@@ -69,6 +69,11 @@ docs/product-map.html  Interactive product map (3 tabs); docs/*.md = design docs
 9. **Privacy.** No external network calls from the studio (fonts are
    self-hosted; the only fetches are localhost). The proxy forwards
    credentials untouched and stores no request content.
+10. **Docs travel with behavior.** `docs/product-map.html` is hand-mirrored
+    from the code (its MODEL_DATA / OPTIMIZER_DATA tables mirror pricing.ts
+    and the plugins). Any user-visible behavior change must update it — and
+    the in-app Docs modal where relevant. Drift is this doc's only failure
+    mode.
 
 ## How the engine fits together (60 seconds)
 
