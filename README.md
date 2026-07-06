@@ -38,6 +38,7 @@ is never uploaded anywhere.
 - [Project structure](#project-structure)
 - [The proxy (`npm run proxy`)](#the-proxy-npm-run-proxy)
 - [Available scripts](#available-scripts)
+- [Uninstalling](#uninstalling)
 - [Tech stack](#tech-stack)
 - [Contributing](#contributing)
 - [License](#license)
@@ -298,6 +299,36 @@ provider prompt-caching and can cost you money.
 | `npm run generate` | Regenerate the feature glue / adapters manually |
 | `npm run typecheck` | Run the TypeScript compiler with no emit |
 | `npm run proxy` | Local LLM proxy — compresses requests in-flight on their way to the provider |
+| `npm run uninstall` | Clean removal: heavy packages + machine-global config (`-- --dry-run` to preview) |
+
+---
+
+## Uninstalling
+
+miserly keeps almost everything inside the project folder — there are **no
+global npm packages, daemons, or launch agents**. A complete removal is:
+
+```bash
+# 0. Preview what will happen (changes nothing):
+npm run uninstall -- --dry-run
+
+# 1. Un-wire any clients pointed at the proxy — do this FIRST.
+#    (shell aliases / ~/.claude/settings.json env block / Cursor's base-URL
+#    override — a client wired to a deleted proxy can't reach its provider)
+
+# 2. Clean up the bits that live outside (or bloat) the folder:
+npm run uninstall
+#    → npm-uninstalls the heavy optional packages (gpt-tokenizer, pdfjs-dist,
+#      mammoth) if installed, and deletes ~/.miserly (the proxy's config)
+
+# 3. Stop anything still running, then delete the folder:
+pkill -f "scripts/proxy.mjs"    # if the proxy is running
+rm -rf <path-to>/miserly
+```
+
+Optional last crumb: the studio keeps its settings in `localStorage` and run
+history in `sessionStorage` for its origin — clear site data for
+`http://localhost:5173` in your browser if you want those gone too.
 
 ---
 
