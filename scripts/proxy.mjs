@@ -303,23 +303,29 @@ async function compressAnthropicBody(body) {
       }
     }
   }
-  for (const msg of body.messages ?? []) {
+  const msgs = body.messages ?? [];
+  for (let i = 0; i < msgs.length; i++) {
+    const msg = msgs[i];
     // Never rewrite the model's own prior words — only what the USER side sends.
     if (msg?.role !== "user") continue;
+    // Chat APIs are stateless: every request re-sends the whole conversation.
+    // Blocks from earlier turns are honest-labelled "(history)" so the monitor
+    // doesn't look like it's showing the wrong request.
+    const hist = i < msgs.length - 1 ? " (history)" : "";
     if (typeof msg.content === "string") {
-      await tryBlock(details, msg, "content", "user text");
+      await tryBlock(details, msg, "content", "user text" + hist);
       continue;
     }
     if (!Array.isArray(msg.content)) continue;
     for (const block of msg.content) {
       if (block?.type === "text") {
-        await tryBlock(details, block, "text", "user text");
+        await tryBlock(details, block, "text", "user text" + hist);
       } else if (block?.type === "tool_result") {
         if (typeof block.content === "string") {
-          await tryBlock(details, block, "content", "tool_result");
+          await tryBlock(details, block, "content", "tool_result" + hist);
         } else if (Array.isArray(block.content)) {
           for (const part of block.content) {
-            if (part?.type === "text") await tryBlock(details, part, "text", "tool_result");
+            if (part?.type === "text") await tryBlock(details, part, "text", "tool_result" + hist);
           }
         }
       }
@@ -331,12 +337,16 @@ async function compressAnthropicBody(body) {
 /** Compress eligible text in an OpenAI /v1/chat/completions body, in place. */
 async function compressOpenAIBody(body) {
   const details = [];
-  for (const msg of body.messages ?? []) {
+  const msgs = body.messages ?? [];
+  for (let i = 0; i < msgs.length; i++) {
+    const msg = msgs[i];
     const role = msg?.role;
     const isSystem = role === "system" || role === "developer";
     if (isSystem && !CFG.compressSystem) continue;
     if (role === "assistant") continue; // never rewrite the model's own words
-    const label = role === "tool" ? "tool message" : isSystem ? "system" : "user text";
+    const hist = i < msgs.length - 1 ? " (history)" : "";
+    const label =
+      (role === "tool" ? "tool message" : isSystem ? "system" : "user text") + hist;
     if (typeof msg.content === "string") {
       await tryBlock(details, msg, "content", label);
       continue;
