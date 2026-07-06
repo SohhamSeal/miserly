@@ -243,9 +243,12 @@ function OnlineView({
                 </span>
               ) : null}
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div
+              className="text-xs text-muted-foreground"
+              title="Counts requests where at least one block was actually compressed, since the proxy started. The activity monitor feed also shows untouched ones but keeps only the most recent 200 and can be cleared — so the two numbers can differ."
+            >
               {stats
-                ? `session: ${stats.requests} request(s) · ${stats.blocks} block(s) · ~${formatCompact(
+                ? `session: ${stats.requests} compressed · ${stats.blocks} block(s) · ~${formatCompact(
                     stats.saved,
                   )} tokens saved${stats.before > 0 ? ` (−${pct}%)` : ""}`
                 : "no traffic yet this session"}

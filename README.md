@@ -303,12 +303,16 @@ OPENAI_BASE_URL=http://localhost:4141/v1 codex         # Codex / Aider
 #   → http://localhost:4141/v1   (managed Cursor models can't be redirected)
 ```
 
-Chat requests passing through (`/v1/messages` and `/v1/chat/completions`) get
-their **oversized user text and tool blocks** compressed by the same engine the
+Chat and Responses-API requests passing through (`/v1/messages`,
+`/v1/chat/completions`, and `/v1/responses` — Codex CLI's default) get their
+**oversized user text and tool blocks** compressed by the same engine the
 studio uses (a 120-record JSONL tool dump becomes one TOON table). Everything
-else — your question, the model's own words, the system prompt, injected
-instruction blocks (`<system-reminder>` skill lists and context updates), your
-API key — passes through untouched.
+else passes through untouched: blocks under the size minimum (which includes
+virtually every typed question), the model's own words, the system prompt /
+`instructions` field, injected instruction blocks (Claude Code's
+`<system-reminder>`, Codex's `<user_instructions>` / `<environment_context>`),
+`count_tokens` probes (compressing those would skew the counts your client
+budgets with), and your API key.
 
 **Turning it on and off — no restarts, nothing breaks.** The proxy always
 passes traffic through; compression is a *live toggle*:
@@ -327,7 +331,16 @@ client, which model, the savings), and the selected request displayed as
 that ride along from earlier turns are labelled **“(history)”** — chat APIs
 re-send the whole conversation every message, which is exactly why inline
 compression compounds. A "Hide untouched" toggle collapses pass-through
-requests into thin timeline markers.
+requests into markers that say what they hid ("3 untouched · 1 bypassed").
+
+**Every request explains itself.** Blocks the proxy left alone show *why*:
+below the size minimum, an agent instruction block (never compressed), or the
+engine couldn't save ≥3% so the original was kept. Requests that ran while
+compression was off show as **bypassed** (so "off" never looks like "broken"),
+legacy endpoints show as **passed through**, and provider errors, network
+failures, and cancellations get a status badge plus a banner saying what
+happened. Token counts carry a `~` because they're fast local estimates, not
+the provider's exact tokenizer.
 
 By default the monitor stores **metadata only, never your text**. The
 **"Capture content"** switch (in the monitor's own header, or one click from

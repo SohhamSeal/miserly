@@ -8,9 +8,12 @@
 //                        └── oversized text / tool blocks are compressed by
 //                            the real miserly engine before forwarding.
 //
-// Speaks BOTH provider shapes:
+// Speaks all three provider shapes:
 //   Anthropic  POST /v1/messages           →  api.anthropic.com
 //   OpenAI     POST /v1/chat/completions   →  api.openai.com
+//   OpenAI     POST /v1/responses          →  api.openai.com  (Codex CLI's default)
+// count_tokens probes and legacy endpoints pass through untouched (compressing
+// a count_tokens body would skew the counts the client budgets with).
 //
 // Wire up:
 //   Claude Code            ANTHROPIC_BASE_URL=http://localhost:4141 claude
@@ -250,15 +253,19 @@ function detectClient(headers, api) {
   return api === "openai" ? "OpenAI-compatible client" : "Anthropic client";
 }
 
+const INSTRUCTION_TAGS = ["<system-reminder>", "<user_instructions>", "<environment_context>"];
+
 async function compressText(text) {
   const tokens = countTokens(text);
   if (tokens < CFG.minTokens) return { ok: false, reason: "below-threshold", tokens };
-  // Injected instruction blocks: Claude Code (and other agents) wrap skill
-  // lists and context updates in <system-reminder> tags INSIDE user messages.
-  // Those are instructions, not data — rewording instructions for a few
-  // percent is a bad trade, so they get the same hands-off policy as system
-  // prompts.
-  if (text.trimStart().startsWith("<system-reminder>")) {
+  // Injected instruction blocks: agents tuck instructions INSIDE user-role
+  // messages — Claude Code wraps skill lists and context updates in
+  // <system-reminder>, Codex CLI sends AGENTS.md as <user_instructions> and
+  // machine context as <environment_context>. Those are instructions, not
+  // data — rewording instructions for a few percent is a bad trade, so they
+  // get the same hands-off policy as system prompts.
+  const lead = text.trimStart();
+  if (INSTRUCTION_TAGS.some((tag) => lead.startsWith(tag))) {
     return { ok: false, reason: "instruction-block", tokens };
   }
   // A demanding budget (half the block, unless the user pinned one) keeps the
@@ -369,6 +376,57 @@ async function compressOpenAIBody(body) {
     for (const part of msg.content) {
       if (part?.type === "text") await tryBlock(walk, part, "text", label);
     }
+  }
+  return walk;
+}
+
+/** Compress eligible text in an OpenAI /v1/responses body, in place.
+ * (The Responses API — Codex CLI's default. Same policy as the chat walkers:
+ * user-side text and tool output only, never the model's own words.) */
+async function compressResponsesBody(body) {
+  const walk = { details: [], skipped: [] };
+  // `instructions` is the Responses-API system prompt — same hands-off default.
+  if (CFG.compressSystem && typeof body.instructions === "string") {
+    await tryBlock(walk, body, "instructions", "instructions");
+  }
+  if (typeof body.input === "string") {
+    await tryBlock(walk, body, "input", "user text");
+    return walk;
+  }
+  if (!Array.isArray(body.input)) return walk;
+  const items = body.input;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (!item || typeof item !== "object") continue;
+    const hist = i < items.length - 1 ? " (history)" : "";
+    // Bare {role, content} items are the message shorthand the API accepts.
+    const type = item.type ?? (item.role !== undefined ? "message" : undefined);
+    if (type === "message") {
+      const role = item.role;
+      if (role === "assistant") continue; // never rewrite the model's own words
+      const isSystem = role === "system" || role === "developer";
+      if (isSystem && !CFG.compressSystem) continue;
+      const label = (isSystem ? "instructions" : "user text") + hist;
+      if (typeof item.content === "string") {
+        await tryBlock(walk, item, "content", label);
+      } else if (Array.isArray(item.content)) {
+        for (const part of item.content) {
+          if (part?.type === "input_text") await tryBlock(walk, part, "text", label);
+        }
+      }
+    } else if (type === "function_call_output") {
+      // The Responses-API analogue of tool_result: client-supplied tool output.
+      if (typeof item.output === "string") {
+        await tryBlock(walk, item, "output", "tool output" + hist);
+      } else if (Array.isArray(item.output)) {
+        for (const part of item.output) {
+          if (part?.type === "input_text" || part?.type === "output_text") {
+            await tryBlock(walk, part, "text", "tool output" + hist);
+          }
+        }
+      }
+    }
+    // function_call / reasoning / item_reference: never touched.
   }
   return walk;
 }
@@ -540,11 +598,13 @@ const server = http.createServer(async (req, res) => {
     // compressing them would change the token counts the client budgets with.
     const isAnthropicChat = req.method === "POST" && path === "/v1/messages";
     const isOpenAIChat = req.method === "POST" && path === "/v1/chat/completions";
-    // Generation endpoints we don't compress (yet) — recorded as passthrough so
-    // a wired Codex (Responses API) session doesn't look like dead air.
+    // The Responses API (Codex CLI's default) is compressed like the chat APIs.
+    const isResponses = req.method === "POST" && path === "/v1/responses";
+    const isChatLike = isAnthropicChat || isOpenAIChat || isResponses;
+    // Legacy generation endpoints we don't compress — recorded as passthrough
+    // so a wired session on them doesn't look like dead air.
     const isOtherGen =
-      req.method === "POST" &&
-      ["/v1/responses", "/v1/completions", "/v1/complete"].includes(path);
+      req.method === "POST" && ["/v1/completions", "/v1/complete"].includes(path);
     if (isOtherGen && bodyBuf.length > 0) {
       const head = bodyBuf.slice(0, 4096).toString("utf8");
       const mm = head.match(/"model"\s*:\s*"([^"]+)"/);
@@ -565,7 +625,7 @@ const server = http.createServer(async (req, res) => {
       history.unshift(entry);
       if (history.length > MAX_HISTORY) history.pop();
     }
-    if (!CFG.enabled && (isAnthropicChat || isOpenAIChat) && bodyBuf.length > 0) {
+    if (!CFG.enabled && isChatLike && bodyBuf.length > 0) {
       // Bypassed — passed through byte-for-byte, but still worth a timeline
       // row: "nothing is showing up" and "compression is off" look identical
       // otherwise. Cheap model sniff from the buffer head; no full parse.
@@ -588,13 +648,15 @@ const server = http.createServer(async (req, res) => {
       history.unshift(entry);
       if (history.length > MAX_HISTORY) history.pop();
     }
-    if (CFG.enabled && (isAnthropicChat || isOpenAIChat) && bodyBuf.length > 0) {
+    if (CFG.enabled && isChatLike && bodyBuf.length > 0) {
       try {
         const body = JSON.parse(bodyBuf.toString("utf8"));
         const api = isAnthropicChat ? "anthropic" : "openai";
         const walk = isAnthropicChat
           ? await compressAnthropicBody(body)
-          : await compressOpenAIBody(body);
+          : isResponses
+            ? await compressResponsesBody(body)
+            : await compressOpenAIBody(body);
         const details = walk.details;
         // Record EVERY parsed chat request — including "nothing over the
         // threshold" ones — so the activity feed shows the whole picture.

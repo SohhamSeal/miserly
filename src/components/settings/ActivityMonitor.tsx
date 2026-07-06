@@ -152,9 +152,16 @@ function HistoryRail({
               <span className="min-w-0 flex-1 truncate">{e.model}</span>
               <span className="shrink-0">
                 {kind === "current" ? (
-                  <span className="text-success">−{pct}%</span>
+                  <span
+                    className="text-success"
+                    title="Shrink across the blocks that were compressed — not the whole request."
+                  >
+                    −{pct}%
+                  </span>
                 ) : kind === "history" ? (
-                  <span>history only · −{pct}%</span>
+                  <span title="Only re-sent conversation history was compressed. Shrink is across those blocks, not the whole request.">
+                    history only · −{pct}%
+                  </span>
                 ) : kind === "skipped" ? (
                   <span>nothing shrunk</span>
                 ) : kind === "bypassed" ? (
@@ -182,7 +189,7 @@ function FailedBanner({ entry }: { entry: ProxyHistoryEntry }) {
       ? "The provider couldn't be reached (network error). Usually transient — the client retries."
       : entry.status === "cancelled"
         ? "The request was cancelled before the provider replied (client timed out or you stopped it)."
-        : `The provider rejected this request (HTTP ${entry.status}). miserly forwarded it unchanged — this is between your client and the provider, not a compression problem.`;
+        : `The provider rejected this request (HTTP ${entry.status}) — usually an auth, rate-limit, or model-access problem between your client and the provider.`;
   return (
     <div className="border-b border-destructive/40 bg-destructive/10 px-3.5 py-2 text-[11px] text-destructive">
       {msg}
@@ -204,10 +211,15 @@ function Detail({
   // When the chosen request changes, default to the CURRENT turn's block —
   // history blocks ride along first in API order, but "what did my latest
   // message do" is the question people are asking.
+  const entryId = entry?.id;
   useEffect(() => {
     const current = entry?.blocks.findIndex((b) => !b.label.includes("(history)")) ?? -1;
     setBlockIdx(current >= 0 ? current : 0);
-  }, [entry?.id, entry?.blocks]);
+    // Re-default only when the SELECTED ENTRY changes. Polling rebuilds the
+    // blocks array every few seconds; keying on it snapped the user's chip
+    // choice back to the default mid-inspection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryId]);
 
   if (!entry) {
     return (
@@ -230,9 +242,9 @@ function Detail({
     } else if (entry.endpoint) {
       headline = "Passed through — not a chat request";
       body = (
-        <>This was a <code>{entry.endpoint}</code> request. miserly only compresses chat
-        requests (<code>/v1/messages</code>, <code>/v1/chat/completions</code>); other endpoints
-        pass through untouched.</>
+        <>This was a <code>{entry.endpoint}</code> request. miserly compresses{" "}
+        <code>/v1/messages</code>, <code>/v1/chat/completions</code> and{" "}
+        <code>/v1/responses</code>; other endpoints pass through untouched.</>
       );
     } else if (entry.skipped && entry.skipped.length > 0) {
       headline = "Nothing was compressed — here's why";
@@ -292,7 +304,7 @@ function Detail({
                   : "border border-border text-muted-foreground hover:text-foreground",
               )}
             >
-              {b.label} · {formatCompact(b.before)}→{formatCompact(b.after)}
+              {b.label} · ~{formatCompact(b.before)}→~{formatCompact(b.after)}
             </button>
           );
         })}
@@ -312,7 +324,7 @@ function Detail({
         <div className="grid min-h-0 flex-1 grid-cols-2">
           <div className="flex min-h-0 flex-col border-r border-border">
             <div className="border-b border-border px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Original · {block.before.toLocaleString()} tok
+              Original · ~{block.before.toLocaleString()} tok
             </div>
             <pre className="flex-1 overflow-auto whitespace-pre px-3 py-2.5 font-mono text-[11px] leading-relaxed text-muted-foreground">
               {block.beforeText}
@@ -320,7 +332,7 @@ function Detail({
           </div>
           <div className="flex min-h-0 flex-col">
             <div className="border-b border-border px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Compressed · {block.after.toLocaleString()} tok
+              Compressed · ~{block.after.toLocaleString()} tok
             </div>
             <pre className="flex-1 overflow-auto whitespace-pre px-3 py-2.5 font-mono text-[11px] leading-relaxed">
               {block.afterText}
@@ -335,11 +347,11 @@ function Detail({
           {/* A little before/after token bar so the pane is still informative */}
           <div className="w-full max-w-xs">
             <div className="mb-1 flex justify-between text-[11px] text-muted-foreground">
-              <span>{block.before.toLocaleString()} tok</span>
+              <span>~{block.before.toLocaleString()} tok</span>
               <span className="text-success">
                 −{reductionPct(block.before, block.after)}%
               </span>
-              <span>{block.after.toLocaleString()} tok</span>
+              <span>~{block.after.toLocaleString()} tok</span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-secondary">
               <div
@@ -374,11 +386,16 @@ function Detail({
         <span>
           <span className="text-muted-foreground/60">block</span> {block.label}
         </span>
-        <span>
-          <span className="text-muted-foreground/60">tokens</span>{" "}
-          {block.before.toLocaleString()} → {block.after.toLocaleString()}
+        <span title="Estimated with a fast local heuristic — not the provider's exact tokenizer.">
+          <span className="text-muted-foreground/60">tokens</span> ~
+          {block.before.toLocaleString()} → ~{block.after.toLocaleString()}
         </span>
-        <span className="text-success">−{reductionPct(block.before, block.after)}%</span>
+        <span
+          className="text-success"
+          title="Shrink of this block — other blocks and the rest of the request are unchanged."
+        >
+          −{reductionPct(block.before, block.after)}%
+        </span>
         <span>
           <span className="text-muted-foreground/60">model</span> {entry.model}
         </span>
@@ -388,7 +405,22 @@ function Detail({
         <span>
           <span className="text-muted-foreground/60">at</span> {timeOf(entry.ts)}
         </span>
-        {block.truncated ? <span className="text-warning">preview truncated</span> : null}
+        {hasText && !capture ? (
+          <span
+            className="cursor-help"
+            title="Capture is off now, but it was on when this request ran, so its text was kept (memory-only). New requests record metadata only."
+          >
+            captured earlier
+          </span>
+        ) : null}
+        {block.truncated ? (
+          <span
+            className="cursor-help text-warning"
+            title="Long content is trimmed for this preview only — compression used the full text, and the full compressed text was forwarded."
+          >
+            preview truncated
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -446,7 +478,13 @@ export function ActivityMonitor({
         <div className="flex items-center gap-3 border-b border-border px-4 py-3">
           <span className="text-base font-semibold tracking-tight">Proxy activity</span>
           <span className="text-xs text-muted-foreground">
-            {entries.length} request(s) · ~{formatCompact(sessionSaved)} tokens saved
+            <span title="Requests in the feed — compressed or not. Keeps the most recent 200, since the proxy started or you last cleared. Memory-only: gone on restart.">
+              {entries.length} recorded
+            </span>
+            {" · "}
+            <span title="Estimated tokens saved across the whole session. Keeps counting even after you clear the list; resets when the proxy restarts. ~ means counts are estimates, not the provider's exact tokenizer.">
+              ~{formatCompact(sessionSaved)} tokens saved
+            </span>
           </span>
           {capture ? (
             <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
@@ -463,7 +501,14 @@ export function ActivityMonitor({
             Capture content
           </label>
           {entries.length > 0 ? (
-            <Button variant="ghost" size="sm" className="mr-8" onClick={onClear} disabled={!online}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mr-8"
+              onClick={onClear}
+              disabled={!online}
+              title="Empties the request list. Session savings keep counting — they reset when the proxy restarts."
+            >
               <Trash2 className="h-3.5 w-3.5" />
               Clear
             </Button>
@@ -483,8 +528,11 @@ export function ActivityMonitor({
           <div className="flex flex-1 flex-col items-center justify-center gap-1 p-8 text-center">
             <div className="text-sm font-medium">No traffic yet this session</div>
             <p className="max-w-sm text-xs text-muted-foreground">
-              Wire a coding agent through the proxy and work normally — every request that passes
-              through appears here.
+              Wire a coding agent through the proxy and work normally. Chat and Responses-API
+              requests (<code>/v1/messages</code>, <code>/v1/chat/completions</code>,{" "}
+              <code>/v1/responses</code>) are compressed and recorded; legacy generation
+              endpoints are recorded as passed-through; anything else (embeddings, token
+              counts…) is forwarded without being recorded.
             </p>
           </div>
         ) : (

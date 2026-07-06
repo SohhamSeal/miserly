@@ -819,8 +819,10 @@ const NODES = [
       the difference.</div>
       <p>Full details on the <strong>Integrations &amp; services</strong> tab of this map.</p>
     `,
-    hood: `<p>The proxy speaks both provider shapes (Anthropic /v1/messages and OpenAI
-      /v1/chat/completions) and routes each to the right upstream. Settings persist to
+    hood: `<p>The proxy speaks all three provider shapes — Anthropic /v1/messages, OpenAI
+      /v1/chat/completions, and the OpenAI Responses API (/v1/responses, Codex CLI's default)
+      — and routes each to the right upstream. count_tokens probes pass through untouched:
+      compressing them would skew the counts the client budgets with. Settings persist to
       ~/.miserly/config.json via a validated localhost-only control API. Cursor's managed
       models route through Cursor's servers and cannot be intercepted — only its
       bring-your-own-key mode works.</p>`
@@ -1024,14 +1026,19 @@ const INTEGRATIONS = [
       <ul>
         <li><strong>Start it:</strong> <code>npm run proxy</code></li>
         <li><strong>Claude Code:</strong> <code>ANTHROPIC_BASE_URL=http://localhost:4141 claude</code></li>
-        <li><strong>Codex / Aider:</strong> <code>OPENAI_BASE_URL=http://localhost:4141/v1</code></li>
+        <li><strong>Codex / Aider:</strong> <code>OPENAI_BASE_URL=http://localhost:4141/v1</code>
+        — both the classic chat API and Codex's Responses API
+        (<span class="mono">/v1/responses</span>) are compressed.</li>
         <li><strong>Cursor:</strong> only with your own API key — Settings → Models → Override
         OpenAI Base URL. Cursor's managed models route through Cursor's servers and cannot be
         redirected.</li>
       </ul>
       <p><strong>Never touched:</strong> your questions, the model's own words, your API key,
-      injected instruction blocks (the <span class="mono">&lt;system-reminder&gt;</span> notes
-      agents tuck inside messages), and — by default — your system prompt, because compressing a
+      injected instruction blocks (Claude Code's <span class="mono">&lt;system-reminder&gt;</span>
+      notes, Codex's <span class="mono">&lt;user_instructions&gt;</span> /
+      <span class="mono">&lt;environment_context&gt;</span>), <span class="mono">count_tokens</span> probes (compressing
+      those would skew the very counts your client budgets with), and — by default — your system
+      prompt / <span class="mono">instructions</span> field, because compressing a
       <em>cached</em> system prompt breaks provider prompt-caching and can cost more than it
       saves.</p>
       <div class="example"><div class="exlabel">The off switch</div>
@@ -1067,6 +1074,12 @@ const INTEGRATIONS = [
         default; an explicit “capture request content” toggle (with a visible badge) keeps full
         before/after text in memory so you can read exactly what was compressed — never written
         to disk, gone on restart.</li>
+        <li><strong>Every request explains itself</strong> — blocks the proxy left alone say
+        why (below the minimum, an instruction block, or the engine couldn't save ≥3%);
+        requests sent while compression was off show as <em>bypassed</em>; provider errors and
+        cancellations get a status badge and a banner clarifying it's between your client and
+        the provider. Token counts carry a <span class="mono">~</span> because they're fast
+        estimates.</li>
       </ul>
       <p>When the proxy isn't running, the panel doesn't break — it shows the start command and
       reconnects by itself the moment the proxy comes up.</p>
@@ -1657,7 +1670,7 @@ const GUIDE = [
       </ul>
       <div class="mock"><div class="mock-title">Settings → Integrations</div>
         <div class="mock-row"><span class="dotm on"></span><span class="grow"><strong>Running on :4141</strong> — compressing</span><span class="mock-switch"></span></div>
-        <div class="mock-sub">session: 14 request(s) · 38 block(s) · ~38,200 tokens saved (−41%)</div>
+        <div class="mock-sub">session: 14 compressed · 38 block(s) · ~38,200 tokens saved (−41%)</div>
         <div class="mock-row"><span class="grow">Goal</span><span style="color:var(--text-muted)">Balanced → <strong>Highest quality</strong></span></div>
       </div>
       <ul>
