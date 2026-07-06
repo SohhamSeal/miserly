@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useStudioStore } from "@/store/useStudioStore";
 import { accent } from "@/lib/accent";
 import { formatNumber, formatPct } from "@/lib/format";
@@ -51,14 +52,26 @@ function Allocation({
 export function ContextBudgetVisualization() {
   const result = useStudioStore((s) => s.result);
   const editedOutput = useStudioStore((s) => s.editedOutput);
-  if (!result) return null;
 
   // Recompute the "after" split from the edited output when it differs, so the
-  // budget card agrees with the report and cost tiles.
-  const budgetAfter =
-    editedOutput !== null && editedOutput !== result.outputText
-      ? buildBudgetAfter(editedOutput)
-      : result.budgetAfter;
+  // budget card agrees with the report and cost tiles. buildBudgetAfter
+  // re-tokenizes the whole text, so memoize it — otherwise every keystroke that
+  // updates editedOutput would re-run the distribution over the full output.
+  // (buildBudgetAfter takes only `text`; modelId is not an input, so it is not a
+  // memo key.) The hook runs unconditionally, before the null guard below, so
+  // hook order stays stable across renders.
+  const budgetAfter = useMemo(
+    () =>
+      result === null
+        ? []
+        : editedOutput !== null && editedOutput !== result.outputText
+          ? buildBudgetAfter(editedOutput)
+          : result.budgetAfter,
+    [result, editedOutput],
+  );
+
+  if (!result) return null;
+
   const afterTotal = budgetAfter.reduce((a, s) => a + s.tokens, 0);
 
   return (

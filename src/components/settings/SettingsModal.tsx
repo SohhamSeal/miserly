@@ -436,7 +436,7 @@ export function SettingsModal() {
         <DialogDescription className="sr-only">
           Configure appearance, behavior and optional tools.
         </DialogDescription>
-        <div className="flex h-[78vh] max-h-[640px] min-h-[420px]">
+        <div className="flex max-h-[min(78vh,640px)]">
           <nav className="w-48 shrink-0 border-r border-border bg-secondary/30 p-3">
             <div className="px-2 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Settings

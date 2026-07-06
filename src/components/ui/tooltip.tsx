@@ -44,7 +44,13 @@ export function Tip({
 }) {
   if (!content) return <>{children}</>;
   return (
-    <Tooltip>
+    // `disableHoverableContent` makes the tooltip close as soon as the pointer
+    // leaves the trigger, instead of keeping it alive via a grace area while the
+    // pointer is "in transit" toward the content. Every `Tip` here holds plain,
+    // non-interactive text, so there is nothing to hover into — and the grace
+    // logic is what left this tooltip stuck open when a DropdownMenu opened from
+    // the same trigger (the trigger's pointer-leave no longer forces a close).
+    <Tooltip disableHoverableContent>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent side={side} align={align} className={className}>
         {content}

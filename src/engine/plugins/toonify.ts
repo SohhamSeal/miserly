@@ -1,7 +1,7 @@
 import {
   collapseWhitespace,
   dedupeGlobalLines,
-  minifyJsonBlocks,
+  toonifyJsonBlocks,
   truncateStackTraces,
 } from "../transforms";
 import { compose, definePlugin, qualityOf } from "./_base";
@@ -11,21 +11,26 @@ export default definePlugin(
     id: "toonify",
     name: "Toonify",
     description:
-      "Converts repetitive structured blocks into a compact, token-efficient form (TOON-style) and collapses recurring traces and duplicate records.",
+      "Re-encodes JSON the TOON way: uniform record arrays become a table whose keys are declared once, and a measured token count decides — per block — whether the table or plain minified JSON ships. Also collapses recurring traces and duplicate records.",
     author: "miserly",
-    version: "0.4",
+    version: "1.0",
     category: "structural",
-    capabilities: ["structured rewrite", "global dedup", "trace collapse"],
+    capabilities: [
+      "TOON table encoding",
+      "measured JSON fallback",
+      "global dedup",
+      "trace collapse",
+    ],
     supportedTypes: ["json", "logs", "stacktrace", "mixed"],
-    ratioRange: [0.45, 0.7],
-    provenance: "reference-sim",
+    ratioRange: [0.3, 0.6],
+    provenance: "native",
     inspiredBy: { name: "TOON (Token-Oriented Object Notation)" },
     accent: "sky",
   },
   (args) => {
     const a = args.config.aggressiveness;
     const { text, notes } = compose(args.text, [
-      minifyJsonBlocks,
+      toonifyJsonBlocks,
       dedupeGlobalLines,
       (t) => truncateStackTraces(t, 3),
       collapseWhitespace,

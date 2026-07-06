@@ -1,4 +1,7 @@
 import type { ContentType } from "@/engine";
+// A large real-world-shaped JSON document, kept as an actual .json file so it
+// stays lintable/valid; `?raw` imports it as a string at build time.
+import enterpriseDataset from "./enterprise-dataset.json?raw";
 
 export interface Sample {
   id: string;
@@ -221,5 +224,13 @@ export const SAMPLES: Sample[] = [
     description: "Structured JSON event stream with many near-duplicate records.",
     hint: "json",
     content: k8sEvents,
+  },
+  {
+    id: "enterprise-json",
+    name: "Enterprise dataset (big JSON)",
+    description:
+      "A large nested commerce dataset — uniform record arrays that Toonify re-encodes as TOON tables.",
+    hint: "json",
+    content: enterpriseDataset,
   },
 ];

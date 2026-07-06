@@ -45,11 +45,15 @@ interface StudioState {
   /** Bumped whenever the run context changes; lets a superseded async run detect
    * that it must not write its (now stale) result back into the store. */
   runToken: number;
+  /** True while the current run's remaining animation delays are being skipped. */
+  skipPacing: boolean;
 
   setInput: (value: string) => void;
   setEditedOutput: (text: string | null) => void;
   /** Abandon an in-flight run, restoring the previous result if there was one. */
   cancel: () => void;
+  /** Fast-forward the rest of the current run's staged animation (keep the run). */
+  skipAnimation: () => void;
   setModelId: (id: string) => void;
   setGoal: (goal: OptimizationGoal) => void;
   setTargetBudget: (tokens: number) => void;
@@ -59,6 +63,17 @@ interface StudioState {
   optimize: () => Promise<void>;
   /** Re-open a past run: restores its input, settings, pipeline and report. */
   loadFromHistory: (entry: HistoryEntry) => void;
+}
+
+/**
+ * The single in-flight run's AbortController, kept outside Zustand state (it is
+ * not render data). `beginRun` aborts any previous run and returns a fresh one;
+ * `endRun` clears it if it is still the current one.
+ */
+let activeController: AbortController | null = null;
+function abortActiveRun() {
+  activeController?.abort();
+  activeController = null;
 }
 
 export const useStudioStore = create<StudioState>((set, get) => ({
@@ -75,21 +90,27 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   editedOutput: null,
   error: null,
   runToken: 0,
+  skipPacing: false,
 
   setEditedOutput: (text) => set({ editedOutput: text }),
 
-  cancel: () =>
+  cancel: () => {
+    if (get().status !== "running") return;
+    // Actually stop the engine (it checks the signal at every stage/nap) so a
+    // cancelled run stops computing instead of racing on in the background.
+    abortActiveRun();
     set((s) => {
-      if (s.status !== "running") return {};
       const runToken = s.runToken + 1;
-      // If this run superseded a previous result, fall back to showing it;
-      // otherwise there's nothing to show so return to the empty idle state.
+      // If this run superseded a previous result, fall back to showing it —
+      // preserving any manual edits the user had made to it; otherwise there's
+      // nothing to show so return to the empty idle state.
       return s.result
         ? {
             runToken,
             status: "done" as const,
             phases: completedPhases(),
             liveStages: s.result.stages,
+            skipPacing: false,
           }
         : {
             runToken,
@@ -97,26 +118,35 @@ export const useStudioStore = create<StudioState>((set, get) => ({
             phases: freshPhases(),
             liveStages: [],
             logs: [],
+            skipPacing: false,
           };
-    }),
+    });
+  },
 
-  setInput: (value) =>
-    set((s) =>
-      s.status === "running"
-        ? {
-            // Editing the input invalidates an in-flight run: bump the token so
-            // its (now stale) result is dropped when it finishes, and drop back
-            // to idle so the UI doesn't hang on a spinner for a run that can no
-            // longer match what's on screen.
-            input: value,
-            runToken: s.runToken + 1,
-            status: "idle",
-            phases: freshPhases(),
-            liveStages: [],
-            logs: [],
-          }
-        : { input: value },
-    ),
+  skipAnimation: () => {
+    if (get().status === "running") set({ skipPacing: true });
+  },
+
+  setInput: (value) => {
+    if (get().status === "running") {
+      // Editing the input invalidates an in-flight run: abort the engine, bump
+      // the token so its (now stale) result is dropped, and drop back to idle so
+      // the UI doesn't hang on a spinner for a run that can no longer match
+      // what's on screen.
+      abortActiveRun();
+      set((s) => ({
+        input: value,
+        runToken: s.runToken + 1,
+        status: "idle",
+        phases: freshPhases(),
+        liveStages: [],
+        logs: [],
+        skipPacing: false,
+      }));
+    } else {
+      set({ input: value });
+    }
+  },
   setModelId: (id) => set({ modelId: id }),
   setGoal: (goal) => set({ goal }),
   setTargetBudget: (tokens) => set({ targetBudget: tokens }),
@@ -124,6 +154,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   loadSample: (id) => {
     const sample = SAMPLES.find((s) => s.id === id);
     if (!sample) return;
+    abortActiveRun();
     useHistoryStore.getState().setActive(null);
     set((s) => ({
       runToken: s.runToken + 1,
@@ -135,10 +166,12 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       liveStages: [],
       logs: [],
       phases: freshPhases(),
+      skipPacing: false,
     }));
   },
 
   clearInput: () => {
+    abortActiveRun();
     useHistoryStore.getState().setActive(null);
     set((s) => ({
       runToken: s.runToken + 1,
@@ -150,10 +183,12 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       liveStages: [],
       logs: [],
       phases: freshPhases(),
+      skipPacing: false,
     }));
   },
 
   reset: () => {
+    abortActiveRun();
     useHistoryStore.getState().setActive(null);
     set((s) => ({
       runToken: s.runToken + 1,
@@ -164,6 +199,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       liveStages: [],
       logs: [],
       phases: freshPhases(),
+      skipPacing: false,
     }));
   },
 
@@ -172,12 +208,20 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     if (status === "running" || input.trim() === "") return;
 
     // Manual pipeline + content-type override come from the Pipeline Builder.
+    // Snapshot the config NOW, at run start — the result is computed with this
+    // config, so recording it (below) with a mid-run-edited config would
+    // mislabel the run. buildManualPlan/history both read from this snapshot.
     const pipeline = usePipelineStore.getState();
+    const configSnapshot = {
+      mode: pipeline.mode,
+      contentType: pipeline.contentType,
+      stages: pipeline.stages.map((s) => ({ ...s })),
+    };
     const manualPlan =
-      pipeline.mode === "manual" ? pipeline.toManualPlan() : undefined;
+      configSnapshot.mode === "manual" ? pipeline.toManualPlan() : undefined;
     const contentTypeOverride =
-      pipeline.contentType !== "auto"
-        ? pipeline.contentType
+      configSnapshot.contentType !== "auto"
+        ? configSnapshot.contentType
         : // When auto-detect is off and no explicit type is chosen, use a neutral plan.
           runtime.autoDetect
           ? undefined
@@ -188,6 +232,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     // is dropped — otherwise a slow run would "resurrect" its stale result.
     const token = get().runToken + 1;
     const alive = () => get().runToken === token;
+    // Abort any previous run and create this run's controller.
+    abortActiveRun();
+    const controller = new AbortController();
+    activeController = controller;
     // Keep the PREVIOUS result on screen while this run animates so a repeat run
     // can be compared A/B during the wait; it's replaced only on success. Any
     // manual edits are dropped since they belong to the old output.
@@ -199,13 +247,16 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       logs: [],
       liveStages: [],
       phases: freshPhases(),
+      skipPacing: false,
     });
 
     // Pacing is a presentation choice: skip the fake staged latency entirely
-    // when Animations is off or the user prefers reduced motion.
+    // when Animations is off or the user prefers reduced motion. `getPace` is
+    // read live so the "Skip" control can fast-forward the rest of a run.
     const settings = useSettingsStore.getState();
-    const pace =
-      featureEnabledFrom(settings, "animations") && !settings.reduceMotion ? 1 : 0;
+    const animate =
+      featureEnabledFrom(settings, "animations") && !settings.reduceMotion;
+    const getPace = () => (get().skipPacing || !animate ? 0 : 1);
 
     try {
       const result = await runOptimization(
@@ -216,7 +267,9 @@ export const useStudioStore = create<StudioState>((set, get) => ({
           modelId,
           contentTypeOverride,
           manualPlan,
-          pace,
+          pace: animate ? 1 : 0,
+          getPace,
+          signal: controller.signal,
         },
         {
           onPhases: (phases) => {
@@ -231,33 +284,39 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         },
       );
       if (!alive()) return;
-      set({ status: "done", result });
+      set({ status: "done", result, skipPacing: false });
 
-      // Capture the run for the session history. We snapshot the pipeline
-      // config + model here because the result itself doesn't carry them.
-      const p = usePipelineStore.getState();
+      // Capture the run for the session history, using the config we snapshotted
+      // at run start (not the possibly-edited live config).
       useHistoryStore.getState().record({
         id: result.id,
         createdAt: result.createdAt,
         modelId,
-        pipelineMode: p.mode,
-        pipelineContentType: p.contentType,
-        pipelineStages: p.stages,
+        pipelineMode: configSnapshot.mode,
+        pipelineContentType: configSnapshot.contentType,
+        pipelineStages: configSnapshot.stages,
         result,
       });
     } catch (err) {
-      if (!alive()) return;
+      // A superseded/cancelled run aborts — its state was already handled by the
+      // action that superseded it, so don't clobber the new state.
+      if (!alive() || controller.signal.aborted) return;
       // A failed run has no output to show, so clear any stale previous result.
       set({
         status: "error",
         error: err instanceof Error ? err.message : String(err),
         result: null,
+        skipPacing: false,
       });
+    } finally {
+      if (activeController === controller) activeController = null;
     }
   },
 
   loadFromHistory: (entry) => {
     const { result } = entry;
+    // Re-opening a past run supersedes any in-flight one.
+    abortActiveRun();
     // Restore the Pipeline Builder to exactly how this run was configured.
     const pipeline = usePipelineStore.getState();
     pipeline.setMode(entry.pipelineMode);
@@ -277,6 +336,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       liveStages: result.stages,
       logs: [],
       phases: completedPhases(),
+      skipPacing: false,
     }));
 
     useHistoryStore.getState().setActive(entry.id);

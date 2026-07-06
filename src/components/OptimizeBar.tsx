@@ -1,4 +1,4 @@
-import { Gauge, Loader2, Sparkles, Target, X } from "lucide-react";
+import { FastForward, Gauge, Loader2, Sparkles, Target, X } from "lucide-react";
 import { useStudioStore } from "@/store/useStudioStore";
 import { GOAL_LABELS, GOAL_HINTS, type OptimizationGoal } from "@/engine";
 import { formatCompact } from "@/lib/format";
@@ -34,6 +34,7 @@ export function OptimizeBar() {
   const setTargetBudget = useStudioStore((s) => s.setTargetBudget);
   const optimize = useStudioStore((s) => s.optimize);
   const cancel = useStudioStore((s) => s.cancel);
+  const skipAnimation = useStudioStore((s) => s.skipAnimation);
 
   const isRunning = status === "running";
   const isEmpty = input.trim() === "";
@@ -85,12 +86,25 @@ export function OptimizeBar() {
 
       <div className="flex flex-wrap items-center gap-2">
         {isRunning ? (
-          <Tip content="Stop this run and keep the previous result.">
-            <Button variant="outline" size="lg" className="h-12" onClick={() => cancel()}>
-              <X className="h-4 w-4" />
-              Cancel
-            </Button>
-          </Tip>
+          <>
+            <Tip content="Stop this run and keep the previous result.">
+              <Button variant="outline" size="lg" className="h-12" onClick={() => cancel()}>
+                <X className="h-4 w-4" />
+                Cancel
+              </Button>
+            </Tip>
+            <Tip content="Skip the animation and jump to the result.">
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-12"
+                onClick={() => skipAnimation()}
+              >
+                <FastForward className="h-4 w-4" />
+                Skip
+              </Button>
+            </Tip>
+          </>
         ) : null}
         <Tip content={`Optimization goal — ${GOAL_HINTS[goal]}`}>
           <div className="w-[180px]">

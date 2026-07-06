@@ -18,3 +18,8 @@ export function countBaseTokens(text: string): number {
   }
   return countHeuristic(text);
 }
+
+/** Which counter `countBaseTokens` is using right now. */
+export function activeTokenizerKind(): "exact" | "estimated" {
+  return countAccurate != null && runtime.useAccurateTokenizer ? "exact" : "estimated";
+}

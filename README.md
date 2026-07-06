@@ -36,6 +36,7 @@ is never uploaded anywhere.
 - [The Settings panel](#the-settings-panel)
 - [How the engine works](#how-the-engine-works)
 - [Project structure](#project-structure)
+- [The proxy (`npm run proxy`)](#the-proxy-npm-run-proxy)
 - [Available scripts](#available-scripts)
 - [Tech stack](#tech-stack)
 - [Contributing](#contributing)
@@ -176,16 +177,22 @@ ML steps (semantic summarization, embeddings-based retrieval) are *simulated* fo
 the demo — but the parts that produce the numbers are **real**:
 
 - **Token counting** uses the exact OpenAI tokenizer when installed, otherwise a
-  fast heuristic. Per-model families apply documented scaling factors.
+  fast ~4-chars/token heuristic. Non-OpenAI families apply *approximate* scaling
+  factors — rough estimates, not per-provider tokenizers — and the report labels
+  counts with a `~` whenever the exact tokenizer isn't the one that measured them.
 - **Structural transforms are genuine** — deduplication, whitespace/JSON
   minification, log collapsing, etc. actually transform your text, so the reported
-  token savings are *measured* on the real output, never faked.
-- **Pricing** is an editable, illustrative per-model table (`src/engine/pricing.ts`).
+  token savings are *measured* on the real output, never faked. Each transform
+  declares the content types it is safe on and runs through a segmentation guard,
+  so a prose reducer never touches a JSON or code segment.
+- **Pricing** is an editable, illustrative per-model table (`src/engine/pricing.ts`),
+  including cache-read/write rates for the "reused prompt" economics advisory.
 
 The optimization engine is **plugin-based**: each optimizer is a small module that
-declares whether it performs a `real` transform or a `sim`(ulated) one, and the UI
-labels them honestly. New optimizers are auto-discovered, so adding one is just
-dropping in a file.
+declares its `provenance` — `native` (miserly's own real transform recipe),
+`reference-sim` (an approximation of a named technique), or `external` (wraps the
+real library) — and the UI labels them honestly. New optimizers are auto-discovered,
+so adding one is just dropping in a file.
 
 ### The generated-adapter trick (for the curious)
 
@@ -234,6 +241,35 @@ miserly/
 
 ---
 
+## The proxy (`npm run proxy`)
+
+miserly can sit **inline between your AI agent and the provider** — the same
+architecture as [Headroom](https://github.com/chopratejas/headroom):
+
+```
+chat client ──► http://localhost:4141 (miserly proxy) ──► api.anthropic.com
+```
+
+```bash
+npm run proxy
+# then, in another terminal:
+ANTHROPIC_BASE_URL=http://localhost:4141 claude
+```
+
+Every `POST /v1/messages` passing through gets its **oversized user text and
+tool_result blocks** compressed by the same engine the studio uses (a 120-record
+JSONL tool dump becomes one TOON table). Everything else — your question, the
+model's own words, the system prompt, your API key — passes through untouched.
+Session savings: `curl http://localhost:4141/miserly/stats`.
+
+Knobs (env vars): `MISERLY_PORT`, `MISERLY_UPSTREAM`, `MISERLY_GOAL`,
+`MISERLY_BUDGET` (default: each block targets half its own size),
+`MISERLY_MIN_TOKENS` (default 1500), `MISERLY_COMPRESS_SYSTEM` (default off —
+compressing a cached system prompt breaks prompt caching and can cost you
+money), `MISERLY_MARKER` (prepend a small compression note to modified blocks).
+
+---
+
 ## Available scripts
 
 | Script | What it does |
@@ -244,6 +280,7 @@ miserly/
 | `npm run setup` | Interactive feature installer |
 | `npm run generate` | Regenerate the feature glue / adapters manually |
 | `npm run typecheck` | Run the TypeScript compiler with no emit |
+| `npm run proxy` | Local LLM proxy — compresses requests in-flight on their way to the provider |
 
 ---
 

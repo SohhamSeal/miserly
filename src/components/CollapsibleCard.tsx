@@ -47,7 +47,10 @@ export function CollapsibleCard({
   return (
     <Card className={className}>
       <CardHeader>
-        <div className="flex items-center justify-between gap-3">
+        {/* Stack on narrow screens so a wide `right` control (e.g. the model
+            picker) sits on its own line below the title instead of crushing it
+            to an unreadable "Op…" ellipsis. Horizontal from sm up. */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"

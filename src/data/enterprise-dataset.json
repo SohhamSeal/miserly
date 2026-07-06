@@ -1,0 +1,1129 @@
+{
+  "metadata": {
+    "dataset_id": "ds_2026_enterprise_001",
+    "name": "Enterprise Commerce Analytics Dataset",
+    "version": "1.0.0",
+    "created_at": "2026-07-05T10:30:00Z",
+    "updated_at": "2026-07-05T10:30:00Z",
+    "environment": "production",
+    "region": "ap-south-1",
+    "currency": "INR",
+    "language": "en-IN",
+    "total_records": 150000,
+    "tags": [
+      "commerce",
+      "analytics",
+      "customers",
+      "orders",
+      "products"
+    ]
+  },
+  "organization": {
+    "id": "org_10001",
+    "name": "NovaGrid Technologies Pvt Ltd",
+    "industry": "Technology",
+    "founded_year": 2018,
+    "active": true,
+    "headquarters": {
+      "address_line_1": "42 Innovation Avenue",
+      "address_line_2": "Tech Park, Block C",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "postal_code": "500081",
+      "country": "India",
+      "coordinates": {
+        "latitude": 17.4483,
+        "longitude": 78.3915
+      }
+    },
+    "departments": [
+      {
+        "id": "dept_001",
+        "name": "Engineering",
+        "employee_count": 240,
+        "budget": 85000000,
+        "teams": [
+          {
+            "id": "team_001",
+            "name": "Backend Platform",
+            "members": 42,
+            "technologies": [
+              "Java",
+              "Python",
+              "PostgreSQL",
+              "Redis",
+              "Kubernetes"
+            ]
+          },
+          {
+            "id": "team_002",
+            "name": "Frontend Experience",
+            "members": 35,
+            "technologies": [
+              "TypeScript",
+              "React",
+              "Next.js",
+              "CSS"
+            ]
+          },
+          {
+            "id": "team_003",
+            "name": "Data Intelligence",
+            "members": 28,
+            "technologies": [
+              "Python",
+              "Spark",
+              "Kafka",
+              "SQL"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "dept_002",
+        "name": "Sales",
+        "employee_count": 95,
+        "budget": 32000000,
+        "teams": [
+          {
+            "id": "team_004",
+            "name": "Enterprise Sales",
+            "members": 45,
+            "target_revenue": 250000000
+          },
+          {
+            "id": "team_005",
+            "name": "SMB Sales",
+            "members": 50,
+            "target_revenue": 120000000
+          }
+        ]
+      }
+    ]
+  },
+  "users": [
+    {
+      "id": "usr_000001",
+      "username": "arjun_kumar",
+      "email": "arjun.kumar@example.com",
+      "first_name": "Arjun",
+      "last_name": "Kumar",
+      "age": 29,
+      "gender": "male",
+      "active": true,
+      "verified": true,
+      "created_at": "2024-01-15T08:20:10Z",
+      "last_login": "2026-07-04T18:45:12Z",
+      "roles": [
+        "customer",
+        "premium_member"
+      ],
+      "profile": {
+        "avatar": "avatar_000001.png",
+        "bio": "Software engineer and technology enthusiast",
+        "occupation": "Software Engineer",
+        "company": "TechSphere Labs",
+        "interests": [
+          "programming",
+          "gaming",
+          "travel",
+          "photography"
+        ],
+        "social": {
+          "public_profile_enabled": true,
+          "followers": 842,
+          "following": 391
+        }
+      },
+      "address": {
+        "street": "12 Lake View Road",
+        "city": "Hyderabad",
+        "state": "Telangana",
+        "postal_code": "500032",
+        "country": "India"
+      },
+      "preferences": {
+        "theme": "dark",
+        "language": "en",
+        "currency": "INR",
+        "notifications": {
+          "email": true,
+          "sms": false,
+          "push": true,
+          "marketing": false
+        }
+      },
+      "stats": {
+        "total_orders": 18,
+        "total_spent": 184250.75,
+        "average_order_value": 10236.15,
+        "loyalty_points": 8420
+      }
+    },
+    {
+      "id": "usr_000002",
+      "username": "meera_sharma",
+      "email": "meera.sharma@example.com",
+      "first_name": "Meera",
+      "last_name": "Sharma",
+      "age": 34,
+      "gender": "female",
+      "active": true,
+      "verified": true,
+      "created_at": "2023-09-22T11:12:00Z",
+      "last_login": "2026-07-05T06:15:33Z",
+      "roles": [
+        "customer"
+      ],
+      "profile": {
+        "avatar": "avatar_000002.png",
+        "bio": "Designer, reader and weekend traveler",
+        "occupation": "Product Designer",
+        "company": "PixelCraft Studio",
+        "interests": [
+          "design",
+          "books",
+          "music",
+          "travel"
+        ]
+      },
+      "address": {
+        "street": "88 Green Park",
+        "city": "Bengaluru",
+        "state": "Karnataka",
+        "postal_code": "560001",
+        "country": "India"
+      },
+      "preferences": {
+        "theme": "light",
+        "language": "en",
+        "currency": "INR",
+        "notifications": {
+          "email": true,
+          "sms": true,
+          "push": true,
+          "marketing": true
+        }
+      },
+      "stats": {
+        "total_orders": 31,
+        "total_spent": 276840.5,
+        "average_order_value": 8930.34,
+        "loyalty_points": 12550
+      }
+    },
+    {
+      "id": "usr_000003",
+      "username": "vikram_reddy",
+      "email": "vikram.reddy@example.com",
+      "first_name": "Vikram",
+      "last_name": "Reddy",
+      "age": 41,
+      "gender": "male",
+      "active": true,
+      "verified": false,
+      "created_at": "2025-03-10T14:22:09Z",
+      "last_login": "2026-06-29T21:11:05Z",
+      "roles": [
+        "customer",
+        "business_buyer"
+      ],
+      "profile": {
+        "avatar": "avatar_000003.png",
+        "bio": "Entrepreneur focused on retail innovation",
+        "occupation": "Business Owner",
+        "company": "VR Retail Solutions",
+        "interests": [
+          "business",
+          "finance",
+          "technology"
+        ]
+      },
+      "address": {
+        "street": "5 Central Avenue",
+        "city": "Vijayawada",
+        "state": "Andhra Pradesh",
+        "postal_code": "520010",
+        "country": "India"
+      },
+      "preferences": {
+        "theme": "system",
+        "language": "te",
+        "currency": "INR",
+        "notifications": {
+          "email": true,
+          "sms": true,
+          "push": false,
+          "marketing": false
+        }
+      },
+      "stats": {
+        "total_orders": 9,
+        "total_spent": 495320,
+        "average_order_value": 55035.56,
+        "loyalty_points": 18750
+      }
+    },
+    {
+      "id": "usr_000004",
+      "username": "sana_fatima",
+      "email": "sana.fatima@example.com",
+      "first_name": "Sana",
+      "last_name": "Fatima",
+      "age": 26,
+      "gender": "female",
+      "active": true,
+      "verified": true,
+      "created_at": "2025-08-19T09:45:00Z",
+      "last_login": "2026-07-05T07:55:20Z",
+      "roles": [
+        "customer",
+        "creator"
+      ],
+      "profile": {
+        "avatar": "avatar_000004.png",
+        "bio": "Content creator and digital marketer",
+        "occupation": "Digital Marketer",
+        "company": "Independent",
+        "interests": [
+          "marketing",
+          "fashion",
+          "video",
+          "social_media"
+        ]
+      },
+      "address": {
+        "street": "17 Jubilee Road",
+        "city": "Hyderabad",
+        "state": "Telangana",
+        "postal_code": "500033",
+        "country": "India"
+      },
+      "preferences": {
+        "theme": "dark",
+        "language": "en",
+        "currency": "INR",
+        "notifications": {
+          "email": false,
+          "sms": false,
+          "push": true,
+          "marketing": true
+        }
+      },
+      "stats": {
+        "total_orders": 22,
+        "total_spent": 143990.25,
+        "average_order_value": 6545.01,
+        "loyalty_points": 7310
+      }
+    }
+  ],
+  "categories": [
+    {
+      "id": "cat_001",
+      "name": "Electronics",
+      "slug": "electronics",
+      "active": true,
+      "subcategories": [
+        {
+          "id": "subcat_001",
+          "name": "Laptops",
+          "slug": "laptops"
+        },
+        {
+          "id": "subcat_002",
+          "name": "Smartphones",
+          "slug": "smartphones"
+        },
+        {
+          "id": "subcat_003",
+          "name": "Accessories",
+          "slug": "accessories"
+        }
+      ]
+    },
+    {
+      "id": "cat_002",
+      "name": "Home and Living",
+      "slug": "home-living",
+      "active": true,
+      "subcategories": [
+        {
+          "id": "subcat_004",
+          "name": "Furniture",
+          "slug": "furniture"
+        },
+        {
+          "id": "subcat_005",
+          "name": "Kitchen",
+          "slug": "kitchen"
+        }
+      ]
+    },
+    {
+      "id": "cat_003",
+      "name": "Fashion",
+      "slug": "fashion",
+      "active": true,
+      "subcategories": [
+        {
+          "id": "subcat_006",
+          "name": "Men",
+          "slug": "men"
+        },
+        {
+          "id": "subcat_007",
+          "name": "Women",
+          "slug": "women"
+        }
+      ]
+    }
+  ],
+  "products": [
+    {
+      "id": "prd_000001",
+      "sku": "LAP-PRO-X1-16",
+      "name": "NovaBook Pro X1",
+      "slug": "novabook-pro-x1",
+      "category_id": "cat_001",
+      "subcategory_id": "subcat_001",
+      "brand": "NovaTech",
+      "status": "active",
+      "featured": true,
+      "price": {
+        "mrp": 149999,
+        "selling_price": 129999,
+        "discount_percentage": 13.33,
+        "currency": "INR",
+        "tax_percentage": 18
+      },
+      "inventory": {
+        "stock": 142,
+        "reserved": 18,
+        "available": 124,
+        "warehouse_locations": [
+          {
+            "warehouse_id": "wh_001",
+            "quantity": 72
+          },
+          {
+            "warehouse_id": "wh_002",
+            "quantity": 70
+          }
+        ]
+      },
+      "specifications": {
+        "processor": "16-core ARM Processor",
+        "memory": "32GB",
+        "storage": "1TB SSD",
+        "display": "16-inch 3.2K OLED",
+        "battery": "92Wh",
+        "weight_kg": 1.72,
+        "operating_system": "NovaOS 6"
+      },
+      "ratings": {
+        "average": 4.7,
+        "count": 1842,
+        "distribution": {
+          "5": 1420,
+          "4": 290,
+          "3": 82,
+          "2": 31,
+          "1": 19
+        }
+      },
+      "tags": [
+        "laptop",
+        "premium",
+        "developer",
+        "creator"
+      ]
+    },
+    {
+      "id": "prd_000002",
+      "sku": "PHN-ULTRA-512",
+      "name": "Orbit Ultra 5G",
+      "slug": "orbit-ultra-5g",
+      "category_id": "cat_001",
+      "subcategory_id": "subcat_002",
+      "brand": "Orbit Mobile",
+      "status": "active",
+      "featured": true,
+      "price": {
+        "mrp": 99999,
+        "selling_price": 89999,
+        "discount_percentage": 10,
+        "currency": "INR",
+        "tax_percentage": 18
+      },
+      "inventory": {
+        "stock": 328,
+        "reserved": 42,
+        "available": 286
+      },
+      "specifications": {
+        "display": "6.8-inch AMOLED",
+        "memory": "16GB",
+        "storage": "512GB",
+        "camera": {
+          "main": "200MP",
+          "ultrawide": "50MP",
+          "telephoto": "50MP",
+          "front": "32MP"
+        },
+        "battery": "5500mAh",
+        "charging": "100W",
+        "connectivity": [
+          "5G",
+          "Wi-Fi 7",
+          "Bluetooth 5.4",
+          "NFC"
+        ]
+      },
+      "ratings": {
+        "average": 4.6,
+        "count": 2751,
+        "distribution": {
+          "5": 1950,
+          "4": 590,
+          "3": 140,
+          "2": 45,
+          "1": 26
+        }
+      },
+      "tags": [
+        "smartphone",
+        "5g",
+        "camera",
+        "premium"
+      ]
+    },
+    {
+      "id": "prd_000003",
+      "sku": "AUD-WL-PRO-01",
+      "name": "EchoWave Pro Headphones",
+      "slug": "echowave-pro-headphones",
+      "category_id": "cat_001",
+      "subcategory_id": "subcat_003",
+      "brand": "EchoWave",
+      "status": "active",
+      "featured": false,
+      "price": {
+        "mrp": 24999,
+        "selling_price": 18999,
+        "discount_percentage": 24,
+        "currency": "INR",
+        "tax_percentage": 18
+      },
+      "inventory": {
+        "stock": 640,
+        "reserved": 55,
+        "available": 585
+      },
+      "specifications": {
+        "type": "Over-ear",
+        "wireless": true,
+        "noise_cancellation": true,
+        "battery_hours": 48,
+        "charging_port": "USB-C",
+        "weight_grams": 265
+      },
+      "ratings": {
+        "average": 4.5,
+        "count": 982
+      },
+      "tags": [
+        "audio",
+        "wireless",
+        "anc",
+        "music"
+      ]
+    },
+    {
+      "id": "prd_000004",
+      "sku": "DSK-ERG-001",
+      "name": "FlexRise Electric Standing Desk",
+      "slug": "flexrise-electric-standing-desk",
+      "category_id": "cat_002",
+      "subcategory_id": "subcat_004",
+      "brand": "WorkNest",
+      "status": "active",
+      "featured": true,
+      "price": {
+        "mrp": 49999,
+        "selling_price": 41999,
+        "discount_percentage": 16,
+        "currency": "INR",
+        "tax_percentage": 18
+      },
+      "inventory": {
+        "stock": 85,
+        "reserved": 12,
+        "available": 73
+      },
+      "specifications": {
+        "width_cm": 160,
+        "depth_cm": 80,
+        "min_height_cm": 62,
+        "max_height_cm": 128,
+        "max_load_kg": 120,
+        "motors": 2,
+        "memory_presets": 4
+      },
+      "ratings": {
+        "average": 4.8,
+        "count": 441
+      },
+      "tags": [
+        "desk",
+        "office",
+        "ergonomic",
+        "electric"
+      ]
+    }
+  ],
+  "orders": [
+    {
+      "id": "ord_202607_000001",
+      "user_id": "usr_000001",
+      "status": "delivered",
+      "created_at": "2026-06-22T10:15:30Z",
+      "updated_at": "2026-06-25T16:45:00Z",
+      "items": [
+        {
+          "product_id": "prd_000001",
+          "sku": "LAP-PRO-X1-16",
+          "name": "NovaBook Pro X1",
+          "quantity": 1,
+          "unit_price": 129999,
+          "discount": 5000,
+          "tax": 22500,
+          "line_total": 147499
+        },
+        {
+          "product_id": "prd_000003",
+          "sku": "AUD-WL-PRO-01",
+          "name": "EchoWave Pro Headphones",
+          "quantity": 1,
+          "unit_price": 18999,
+          "discount": 1000,
+          "tax": 3240,
+          "line_total": 21239
+        }
+      ],
+      "pricing": {
+        "subtotal": 148998,
+        "discount": 6000,
+        "tax": 25740,
+        "shipping": 0,
+        "grand_total": 168738
+      },
+      "payment": {
+        "id": "pay_000001",
+        "method": "credit_card",
+        "status": "captured",
+        "transaction_id": "txn_A8F92K1P",
+        "currency": "INR",
+        "amount": 168738,
+        "paid_at": "2026-06-22T10:16:02Z"
+      },
+      "shipping": {
+        "method": "express",
+        "carrier": "RapidShip",
+        "tracking_number": "RS982731452IN",
+        "estimated_delivery": "2026-06-25",
+        "delivered_at": "2026-06-25T16:45:00Z",
+        "address": {
+          "street": "12 Lake View Road",
+          "city": "Hyderabad",
+          "state": "Telangana",
+          "postal_code": "500032",
+          "country": "India"
+        }
+      }
+    },
+    {
+      "id": "ord_202607_000002",
+      "user_id": "usr_000002",
+      "status": "shipped",
+      "created_at": "2026-07-02T14:20:11Z",
+      "updated_at": "2026-07-04T09:35:00Z",
+      "items": [
+        {
+          "product_id": "prd_000002",
+          "sku": "PHN-ULTRA-512",
+          "name": "Orbit Ultra 5G",
+          "quantity": 1,
+          "unit_price": 89999,
+          "discount": 4500,
+          "tax": 15390,
+          "line_total": 100889
+        }
+      ],
+      "pricing": {
+        "subtotal": 89999,
+        "discount": 4500,
+        "tax": 15390,
+        "shipping": 0,
+        "grand_total": 100889
+      },
+      "payment": {
+        "id": "pay_000002",
+        "method": "upi",
+        "status": "captured",
+        "transaction_id": "txn_U91KL2M4",
+        "currency": "INR",
+        "amount": 100889,
+        "paid_at": "2026-07-02T14:20:50Z"
+      },
+      "shipping": {
+        "method": "standard",
+        "carrier": "BlueParcel",
+        "tracking_number": "BP771920182IN",
+        "estimated_delivery": "2026-07-07",
+        "delivered_at": null
+      }
+    },
+    {
+      "id": "ord_202607_000003",
+      "user_id": "usr_000003",
+      "status": "processing",
+      "created_at": "2026-07-05T05:42:19Z",
+      "updated_at": "2026-07-05T06:00:00Z",
+      "items": [
+        {
+          "product_id": "prd_000004",
+          "sku": "DSK-ERG-001",
+          "name": "FlexRise Electric Standing Desk",
+          "quantity": 4,
+          "unit_price": 41999,
+          "discount": 12000,
+          "tax": 28079.28,
+          "line_total": 184075.28
+        }
+      ],
+      "pricing": {
+        "subtotal": 167996,
+        "discount": 12000,
+        "tax": 28079.28,
+        "shipping": 0,
+        "grand_total": 184075.28
+      },
+      "payment": {
+        "id": "pay_000003",
+        "method": "bank_transfer",
+        "status": "pending_verification",
+        "transaction_id": "txn_BK92MN811",
+        "currency": "INR",
+        "amount": 184075.28,
+        "paid_at": null
+      },
+      "shipping": {
+        "method": "freight",
+        "carrier": null,
+        "tracking_number": null,
+        "estimated_delivery": "2026-07-12",
+        "delivered_at": null
+      }
+    }
+  ],
+  "warehouses": [
+    {
+      "id": "wh_001",
+      "name": "Hyderabad Central Warehouse",
+      "active": true,
+      "capacity": 250000,
+      "current_utilization_percentage": 72.4,
+      "location": {
+        "city": "Hyderabad",
+        "state": "Telangana",
+        "country": "India",
+        "postal_code": "501401"
+      },
+      "operations": {
+        "employees": 185,
+        "shifts_per_day": 3,
+        "average_daily_shipments": 4200,
+        "automation_level": "high"
+      }
+    },
+    {
+      "id": "wh_002",
+      "name": "Bengaluru South Warehouse",
+      "active": true,
+      "capacity": 180000,
+      "current_utilization_percentage": 64.8,
+      "location": {
+        "city": "Bengaluru",
+        "state": "Karnataka",
+        "country": "India",
+        "postal_code": "560099"
+      },
+      "operations": {
+        "employees": 142,
+        "shifts_per_day": 2,
+        "average_daily_shipments": 3100,
+        "automation_level": "medium"
+      }
+    }
+  ],
+  "reviews": [
+    {
+      "id": "rev_000001",
+      "user_id": "usr_000001",
+      "product_id": "prd_000001",
+      "rating": 5,
+      "title": "Excellent machine for development",
+      "comment": "Fast performance, strong battery life and a very good display.",
+      "verified_purchase": true,
+      "helpful_count": 128,
+      "created_at": "2026-06-29T12:30:00Z",
+      "moderation": {
+        "status": "approved",
+        "flagged": false,
+        "sentiment": "positive"
+      }
+    },
+    {
+      "id": "rev_000002",
+      "user_id": "usr_000002",
+      "product_id": "prd_000002",
+      "rating": 4,
+      "title": "Great camera and display",
+      "comment": "The phone is fast and the camera performs well in low light.",
+      "verified_purchase": true,
+      "helpful_count": 74,
+      "created_at": "2026-07-04T18:15:00Z",
+      "moderation": {
+        "status": "approved",
+        "flagged": false,
+        "sentiment": "positive"
+      }
+    }
+  ],
+  "coupons": [
+    {
+      "id": "cpn_001",
+      "code": "WELCOME2026",
+      "type": "percentage",
+      "value": 10,
+      "maximum_discount": 2000,
+      "minimum_order_value": 5000,
+      "active": true,
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2026-12-31T23:59:59Z",
+      "usage": {
+        "limit": 100000,
+        "used": 42781,
+        "per_user_limit": 1
+      }
+    },
+    {
+      "id": "cpn_002",
+      "code": "TECHFEST5000",
+      "type": "fixed",
+      "value": 5000,
+      "maximum_discount": 5000,
+      "minimum_order_value": 75000,
+      "active": true,
+      "valid_from": "2026-07-01T00:00:00Z",
+      "valid_until": "2026-07-31T23:59:59Z",
+      "usage": {
+        "limit": 5000,
+        "used": 1842,
+        "per_user_limit": 1
+      }
+    }
+  ],
+  "analytics": {
+    "period": {
+      "from": "2026-01-01",
+      "to": "2026-07-05"
+    },
+    "revenue": {
+      "gross": 984275000,
+      "discounts": 74210000,
+      "refunds": 18250000,
+      "net": 891815000,
+      "currency": "INR"
+    },
+    "orders": {
+      "total": 84215,
+      "completed": 76942,
+      "cancelled": 4120,
+      "refunded": 1842,
+      "processing": 1311,
+      "average_order_value": 10589.76
+    },
+    "customers": {
+      "total": 152840,
+      "new": 38210,
+      "returning": 114630,
+      "active_monthly": 78420,
+      "churn_rate": 3.8
+    },
+    "traffic": {
+      "sessions": 5842000,
+      "unique_visitors": 3184000,
+      "page_views": 21850000,
+      "bounce_rate": 38.4,
+      "average_session_duration_seconds": 284,
+      "conversion_rate": 2.64
+    },
+    "channels": [
+      {
+        "name": "organic_search",
+        "sessions": 2150000,
+        "revenue": 325000000,
+        "conversion_rate": 3.12
+      },
+      {
+        "name": "paid_search",
+        "sessions": 1420000,
+        "revenue": 268000000,
+        "conversion_rate": 3.85
+      },
+      {
+        "name": "social",
+        "sessions": 980000,
+        "revenue": 124000000,
+        "conversion_rate": 1.92
+      },
+      {
+        "name": "direct",
+        "sessions": 842000,
+        "revenue": 174815000,
+        "conversion_rate": 2.71
+      },
+      {
+        "name": "referral",
+        "sessions": 450000,
+        "revenue": 68000000,
+        "conversion_rate": 2.24
+      }
+    ],
+    "monthly_performance": [
+      {
+        "month": "2026-01",
+        "revenue": 118500000,
+        "orders": 11240,
+        "new_customers": 5420
+      },
+      {
+        "month": "2026-02",
+        "revenue": 124800000,
+        "orders": 11890,
+        "new_customers": 5680
+      },
+      {
+        "month": "2026-03",
+        "revenue": 137200000,
+        "orders": 12940,
+        "new_customers": 6110
+      },
+      {
+        "month": "2026-04",
+        "revenue": 142900000,
+        "orders": 13420,
+        "new_customers": 6280
+      },
+      {
+        "month": "2026-05",
+        "revenue": 151400000,
+        "orders": 14150,
+        "new_customers": 6540
+      },
+      {
+        "month": "2026-06",
+        "revenue": 164300000,
+        "orders": 15110,
+        "new_customers": 7120
+      },
+      {
+        "month": "2026-07",
+        "revenue": 36715000,
+        "orders": 5465,
+        "new_customers": 1060
+      }
+    ]
+  },
+  "system": {
+    "status": "operational",
+    "services": [
+      {
+        "name": "api_gateway",
+        "status": "healthy",
+        "uptime_percentage": 99.998,
+        "latency_ms": {
+          "p50": 42,
+          "p95": 118,
+          "p99": 240
+        }
+      },
+      {
+        "name": "authentication",
+        "status": "healthy",
+        "uptime_percentage": 99.999,
+        "latency_ms": {
+          "p50": 28,
+          "p95": 75,
+          "p99": 132
+        }
+      },
+      {
+        "name": "order_service",
+        "status": "healthy",
+        "uptime_percentage": 99.992,
+        "latency_ms": {
+          "p50": 65,
+          "p95": 180,
+          "p99": 390
+        }
+      },
+      {
+        "name": "payment_service",
+        "status": "degraded",
+        "uptime_percentage": 99.91,
+        "latency_ms": {
+          "p50": 120,
+          "p95": 680,
+          "p99": 1450
+        }
+      }
+    ],
+    "infrastructure": {
+      "cloud_region": "ap-south-1",
+      "clusters": 4,
+      "nodes": 128,
+      "containers": 2840,
+      "databases": {
+        "primary": {
+          "engine": "PostgreSQL",
+          "version": "17",
+          "size_gb": 8420,
+          "replicas": 5
+        },
+        "cache": {
+          "engine": "Redis",
+          "nodes": 24,
+          "memory_gb": 1536
+        },
+        "search": {
+          "engine": "OpenSearch",
+          "nodes": 18,
+          "indexed_documents": 842000000
+        }
+      }
+    }
+  },
+  "feature_flags": {
+    "new_checkout": {
+      "enabled": true,
+      "rollout_percentage": 75,
+      "target_segments": [
+        "premium",
+        "returning_customers"
+      ]
+    },
+    "ai_recommendations": {
+      "enabled": true,
+      "rollout_percentage": 100,
+      "model_version": "rec-v4.8.2"
+    },
+    "same_day_delivery": {
+      "enabled": true,
+      "rollout_percentage": 35,
+      "target_cities": [
+        "Hyderabad",
+        "Bengaluru",
+        "Mumbai",
+        "Delhi"
+      ]
+    },
+    "crypto_payments": {
+      "enabled": false,
+      "rollout_percentage": 0,
+      "target_segments": []
+    }
+  },
+  "audit_logs": [
+    {
+      "id": "log_000001",
+      "timestamp": "2026-07-05T08:00:12Z",
+      "actor": {
+        "type": "user",
+        "id": "usr_000001"
+      },
+      "action": "LOGIN_SUCCESS",
+      "resource": "authentication",
+      "ip_address": "203.0.113.10",
+      "metadata": {
+        "device": "desktop",
+        "browser": "Chrome",
+        "risk_score": 0.04
+      }
+    },
+    {
+      "id": "log_000002",
+      "timestamp": "2026-07-05T08:01:45Z",
+      "actor": {
+        "type": "system",
+        "id": "svc_order_processor"
+      },
+      "action": "ORDER_STATUS_UPDATED",
+      "resource": "ord_202607_000002",
+      "metadata": {
+        "previous_status": "processing",
+        "new_status": "shipped",
+        "automated": true
+      }
+    },
+    {
+      "id": "log_000003",
+      "timestamp": "2026-07-05T08:05:33Z",
+      "actor": {
+        "type": "admin",
+        "id": "adm_00012"
+      },
+      "action": "PRODUCT_PRICE_UPDATED",
+      "resource": "prd_000003",
+      "metadata": {
+        "old_price": 19999,
+        "new_price": 18999,
+        "reason": "seasonal_campaign"
+      }
+    }
+  ],
+  "configuration": {
+    "application": {
+      "name": "NovaCommerce",
+      "version": "8.4.1",
+      "maintenance_mode": false,
+      "timezone": "Asia/Kolkata",
+      "default_locale": "en-IN"
+    },
+    "limits": {
+      "max_cart_items": 50,
+      "max_order_value": 5000000,
+      "max_login_attempts": 5,
+      "session_timeout_minutes": 60,
+      "api_rate_limit_per_minute": 1200
+    },
+    "security": {
+      "mfa_enabled": true,
+      "password_policy": {
+        "minimum_length": 12,
+        "require_uppercase": true,
+        "require_lowercase": true,
+        "require_number": true,
+        "require_special_character": true,
+        "expiration_days": 90
+      },
+      "encryption": {
+        "at_rest": true,
+        "in_transit": true,
+        "algorithm": "AES-256"
+      }
+    }
+  }
+}

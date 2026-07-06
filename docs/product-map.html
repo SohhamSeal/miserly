@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>miserly · how it works — the product map</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>" />
+<style>
+  /* ------------------------------------------------------------------ */
+  /* miserly product map — self-contained, no external resources.        */
+  /* Dark developer-tool aesthetic matching the studio.                  */
+  /* ------------------------------------------------------------------ */
+  :root {
+    --bg: #09090b;
+    --bg-soft: #101014;
+    --card: #141419;
+    --card-hover: #1a1a22;
+    --border: #26262e;
+    --border-bright: #3b3b47;
+    --text: #e7e7ec;
+    --text-muted: #9a9aa6;
+    --text-faint: #6b6b76;
+    --indigo: #6366f1;
+    --violet: #8b5cf6;
+    --emerald: #34d399;
+    --amber: #fbbf24;
+    --sky: #38bdf8;
+    --rose: #fb7185;
+    --accent-grad: linear-gradient(135deg, #6366f1, #8b5cf6);
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* An author `display` rule (e.g. .flow{display:flex}) silently defeats the
+     hidden attribute's UA styling — force it. */
+  [hidden] { display: none !important; }
+  html { scroll-behavior: smooth; }
+  body {
+    background:
+      radial-gradient(1200px 500px at 15% -10%, rgba(99, 102, 241, 0.12), transparent 60%),
+      radial-gradient(900px 400px at 90% 0%, rgba(139, 92, 246, 0.08), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.55;
+    min-height: 100vh;
+  }
+  code, .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.92em;
+    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 5px;
+    padding: 0.08em 0.35em;
+    color: #c7c8ff;
+  }
+
+  /* ---------- header ---------- */
+  header {
+    padding: 34px 28px 10px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .coin {
+    width: 44px; height: 44px; border-radius: 12px;
+    background: var(--accent-grad);
+    display: grid; place-items: center;
+    font-size: 22px; box-shadow: var(--shadow);
+    flex: none;
+  }
+  .brand h1 { font-size: 26px; letter-spacing: -0.02em; }
+  .brand h1 .chip {
+    font-size: 11px; vertical-align: middle; margin-left: 8px;
+    background: rgba(99, 102, 241, 0.15); color: #b3b5ff;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    padding: 3px 8px; border-radius: 999px; letter-spacing: 0.06em;
+    text-transform: uppercase; font-weight: 600;
+  }
+  header p.tag { color: var(--text-muted); margin-top: 8px; max-width: 68ch; }
+  header p.hint { color: var(--text-faint); margin-top: 6px; font-size: 13.5px; }
+  header p.hint b { color: var(--text-muted); }
+
+  /* ---------- layout ---------- */
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+    gap: 26px;
+    max-width: 1280px;
+    margin: 18px auto 80px;
+    padding: 0 28px;
+    align-items: start;
+  }
+
+  /* ---------- flow column ---------- */
+  .flow { display: flex; flex-direction: column; }
+  .stage {
+    position: relative;
+  }
+  .node {
+    width: 100%;
+    text-align: left;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    cursor: pointer;
+    color: var(--text);
+    font: inherit;
+    display: flex; gap: 14px; align-items: center;
+    transition: border-color .15s, background .15s, transform .12s;
+    box-shadow: 0 2px 10px rgba(0,0,0,.25);
+  }
+  .node:hover { background: var(--card-hover); border-color: var(--border-bright); transform: translateY(-1px); }
+  .node:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+  .node.active {
+    border-color: var(--indigo);
+    background: linear-gradient(180deg, rgba(99,102,241,.14), rgba(99,102,241,.05)), var(--card);
+    box-shadow: 0 0 0 1px rgba(99,102,241,.35), var(--shadow);
+  }
+  .node .ico {
+    width: 42px; height: 42px; border-radius: 11px; flex: none;
+    display: grid; place-items: center; font-size: 20px;
+    background: rgba(99,102,241,.14);
+    border: 1px solid rgba(99,102,241,.25);
+  }
+  .node .txt .step {
+    font-size: 11px; font-weight: 700; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--text-faint);
+  }
+  .node.active .txt .step { color: #a5a7ff; }
+  .node .txt h3 { font-size: 16.5px; letter-spacing: -0.01em; margin-top: 1px; }
+  .node .txt p { font-size: 13.5px; color: var(--text-muted); margin-top: 2px; }
+
+  /* connector between spine blocks */
+  .connector {
+    height: 34px; width: 2px;
+    background: linear-gradient(var(--border-bright), var(--border));
+    margin-left: 39px;
+    position: relative;
+  }
+  .connector::after {
+    content: "";
+    position: absolute; bottom: -1px; left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top: 8px solid var(--border-bright);
+  }
+
+  /* branch pills hanging off a spine block */
+  .branches {
+    margin: 10px 0 2px 39px;
+    padding-left: 22px;
+    border-left: 2px dotted var(--border-bright);
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .pill {
+    font: inherit; font-size: 13px; color: var(--text-muted);
+    background: var(--bg-soft);
+    border: 1px dashed var(--border-bright);
+    border-radius: 999px;
+    padding: 7px 14px 7px 11px;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .pill:hover { color: var(--text); border-color: var(--indigo); background: var(--card-hover); }
+  .pill:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+  .pill.active {
+    color: #c7c8ff; border-style: solid; border-color: var(--indigo);
+    background: rgba(99,102,241,.12);
+  }
+  .pill .pico { font-size: 14px; }
+
+  .finish {
+    margin-top: 6px;
+    text-align: center; color: var(--text-faint); font-size: 13px;
+    padding: 14px; border: 1px dashed var(--border); border-radius: 12px;
+  }
+  .finish b { color: var(--emerald); }
+
+  /* ---------- tab bar ---------- */
+  .tabs {
+    display: flex; gap: 8px;
+    max-width: 1280px; margin: 20px auto 0; padding: 0 28px;
+  }
+  .tabbtn {
+    font: inherit; font-size: 14px; font-weight: 600;
+    color: var(--text-muted);
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 999px; padding: 9px 18px; cursor: pointer;
+    transition: color .15s, border-color .15s, background .15s;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .tabbtn:hover { color: var(--text); border-color: var(--border-bright); }
+  .tabbtn:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+  .tabbtn.active {
+    color: #fff; border-color: transparent;
+    background: var(--accent-grad);
+    box-shadow: 0 4px 18px rgba(99,102,241,.35);
+  }
+
+  /* ---------- integrations grid ---------- */
+  .igrid { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .igroup { margin-bottom: 18px; }
+  .igroup > h4 {
+    font-size: 12px; font-weight: 700; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--text-faint);
+    margin: 4px 0 10px 2px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .igroup > h4::after {
+    content: ""; flex: 1; height: 1px; background: var(--border);
+  }
+  .igroup > p.gnote { font-size: 13px; color: var(--text-muted); margin: -4px 0 10px 2px; }
+  .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .icard {
+    text-align: left; font: inherit; color: var(--text);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 13px; padding: 13px 15px;
+    cursor: pointer;
+    display: flex; flex-direction: column; gap: 7px;
+    transition: border-color .15s, background .15s, transform .12s;
+    min-width: 0;
+  }
+  .icard:hover { background: var(--card-hover); border-color: var(--border-bright); transform: translateY(-1px); }
+  .icard:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+  .icard.active {
+    border-color: var(--indigo);
+    background: linear-gradient(180deg, rgba(99,102,241,.14), rgba(99,102,241,.05)), var(--card);
+    box-shadow: 0 0 0 1px rgba(99,102,241,.35);
+  }
+  .icard .row1 { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .icard .cico { font-size: 19px; flex: none; }
+  .icard .row1 h3 {
+    font-size: 14.5px; letter-spacing: -0.01em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .icard .row1 .prov {
+    margin-left: auto; flex: none;
+    font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--text-faint);
+  }
+  .icard .status {
+    font-size: 12px; color: var(--text-muted);
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .schip {
+    display: inline-flex; align-items: center; gap: 5px;
+    border-radius: 999px; padding: 2.5px 9px;
+    font-size: 11.5px; font-weight: 600;
+    border: 1px solid var(--border-bright);
+    background: var(--bg-soft); color: var(--text-muted);
+  }
+  .schip.on  { color: #7ee2b8; border-color: rgba(52,211,153,.4);  background: rgba(52,211,153,.08); }
+  .schip.off { color: #d0d0da; border-color: var(--border-bright); }
+  .schip.dl  { color: #f5cf87; border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.07); }
+  .schip.price { color: #a5c8ff; border-color: rgba(56,189,248,.35); background: rgba(56,189,248,.07); }
+  @media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
+
+  /* ---------- detail panel ---------- */
+  .panel {
+    position: sticky; top: 22px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 24px 24px 20px;
+    box-shadow: var(--shadow);
+    max-height: calc(100vh - 44px);
+    overflow-y: auto;
+  }
+  .panel .crumb {
+    font-size: 11px; font-weight: 700; letter-spacing: .09em;
+    text-transform: uppercase; color: #a5a7ff;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel h2 {
+    font-size: 22px; letter-spacing: -0.02em; margin-top: 8px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .panel h2 .big { font-size: 26px; }
+  .panel .body { margin-top: 14px; color: #cfcfd8; font-size: 14.5px; }
+  .panel .body p { margin-bottom: 12px; }
+  .panel .body ul { margin: 0 0 12px 20px; }
+  .panel .body li { margin-bottom: 7px; }
+  .panel .body li::marker { color: var(--indigo); }
+
+  .example {
+    background: rgba(52, 211, 153, 0.07);
+    border: 1px solid rgba(52, 211, 153, 0.25);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin: 14px 0;
+    font-size: 13.5px;
+  }
+  .example .exlabel {
+    font-size: 11px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--emerald); margin-bottom: 5px;
+  }
+  details.hood {
+    margin-top: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0;
+    overflow: hidden;
+  }
+  details.hood summary {
+    cursor: pointer; padding: 11px 14px;
+    font-size: 13px; font-weight: 600; color: var(--text-muted);
+    list-style: none; user-select: none;
+  }
+  details.hood summary::-webkit-details-marker { display: none; }
+  details.hood summary::before { content: "▸ "; color: var(--indigo); }
+  details.hood[open] summary::before { content: "▾ "; }
+  details.hood .hoodbody { padding: 2px 14px 13px; font-size: 13.5px; color: var(--text-muted); }
+  details.hood .hoodbody p { margin-bottom: 9px; }
+  details.hood .hoodbody ul { margin: 0 0 9px 18px; }
+
+  .navrow {
+    display: flex; justify-content: space-between; gap: 10px;
+    margin-top: 20px; padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .navbtn {
+    font: inherit; font-size: 13.5px; font-weight: 600;
+    color: var(--text-muted);
+    background: var(--card); border: 1px solid var(--border);
+    padding: 9px 16px; border-radius: 10px; cursor: pointer;
+    transition: color .15s, border-color .15s;
+    max-width: 48%; text-align: left;
+  }
+  .navbtn:hover:not(:disabled) { color: var(--text); border-color: var(--indigo); }
+  .navbtn:disabled { opacity: 0.35; cursor: default; }
+  .navbtn.next { text-align: right; }
+  .navbtn small { display: block; font-weight: 400; color: var(--text-faint); font-size: 11.5px; }
+
+  /* mobile */
+  .panel-close { display: none; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .panel {
+      position: fixed; inset: auto 0 0 0; top: auto;
+      max-height: 72vh;
+      border-radius: 18px 18px 0 0;
+      transform: translateY(105%);
+      transition: transform .25s ease;
+      z-index: 50;
+    }
+    .panel.open { transform: translateY(0); }
+    .panel-close {
+      display: block; position: absolute; top: 12px; right: 14px;
+      font: inherit; font-size: 20px; line-height: 1;
+      background: var(--card); color: var(--text-muted);
+      border: 1px solid var(--border); border-radius: 8px;
+      width: 32px; height: 32px; cursor: pointer;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="coin">🪙</div>
+    <h1>miserly <span class="chip">product map</span></h1>
+  </div>
+  <p class="tag">
+    AI models charge for every chunk of text you send them. <strong>miserly</strong> shrinks
+    that text before it goes — keeping the meaning, dropping the waste — so every request
+    costs less. This page walks you through the whole product, step by step.
+  </p>
+  <p class="hint">👆 <b>Click any block</b> to read what it does in plain language. Use <b>Next</b> in the side panel to take the tour in order.</p>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Product map sections">
+  <button class="tabbtn active" id="tabbtn-flow" role="tab" aria-selected="true">🗺️ How it works</button>
+  <button class="tabbtn" id="tabbtn-optimizers" role="tab" aria-selected="false">🗜️ The optimizers</button>
+  <button class="tabbtn" id="tabbtn-integrations" role="tab" aria-selected="false">🧩 Integrations &amp; services</button>
+</nav>
+
+<div class="layout">
+  <div class="left" style="min-width:0">
+    <main class="flow" id="flow" aria-label="miserly product flow diagram"></main>
+    <main class="igrid" id="ogrid" aria-label="the compression optimizers" hidden></main>
+    <main class="igrid" id="igrid" aria-label="integrated services and features" hidden></main>
+  </div>
+
+  <aside class="panel" id="panel" aria-live="polite">
+    <button class="panel-close" id="panelClose" aria-label="Close details">✕</button>
+    <div id="panelContent"></div>
+    <div class="navrow">
+      <button class="navbtn prev" id="btnPrev"></button>
+      <button class="navbtn next" id="btnNext"></button>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* =====================================================================
+   All content lives in this one list. Each entry is either a "spine"
+   step (a big block in the vertical flow) or a "branch" (a small pill
+   attached to a spine step). Order in this array = tour order.
+   ===================================================================== */
+const NODES = [
+  {
+    id: "problem", kind: "spine", icon: "💸", step: "The problem",
+    title: "AI charges by the token",
+    blurb: "Why sending less text saves real money.",
+    body: `
+      <p>When you send text to an AI model (like ChatGPT, Claude or Gemini), it doesn't count
+      pages or words — it counts <strong>tokens</strong>: little chunks of text, roughly
+      three-quarters of a word each. Every single token in your request costs money.</p>
+      <p>The problem: the text people send AI is usually <em>full of waste</em>. Log files repeat
+      the same line hundreds of times. Code carries comments the AI doesn't need. Documents
+      ramble. Data files are padded with spaces just to look pretty. You pay for all of it —
+      on <strong>every single request</strong>.</p>
+      <div class="example"><div class="exlabel">For example</div>
+      A support engineer pastes a 90,000-character error log into an AI assistant several times a
+      day. Most of it is the same heartbeat message repeated. They're paying full price for the
+      repetition — thousands of times a month.</div>
+      <p><strong>miserly</strong> is a free tool that runs entirely in your web browser and
+      strips that waste out <em>before</em> the text goes to the AI.</p>
+    `,
+    hood: `<p>Token counts are measured with a real tokenizer when the optional exact tokenizer is
+      installed, or estimated at roughly 4 characters per token otherwise — and the app always
+      tells you which one it used (estimated numbers carry a <code>~</code> prefix).</p>`
+  },
+  {
+    id: "privacy", kind: "branch", parent: "problem", icon: "🔒",
+    title: "Nothing ever leaves your computer",
+    blurb: "",
+    body: `
+      <p>This matters enough to say before anything else: <strong>your text is never uploaded
+      anywhere</strong>. miserly is not a website that sends your data to a server for
+      processing — the entire engine runs inside your own browser, on your own machine.</p>
+      <ul>
+        <li><strong>No servers.</strong> The compression happens locally, in the page.</li>
+        <li><strong>No tracking.</strong> No analytics, no telemetry, no cookies phoning home.</li>
+        <li><strong>Works offline.</strong> Once the page has loaded, you can pull the network cable
+        and it keeps working. Even the fonts are bundled in, not fetched from the internet.</li>
+      </ul>
+      <p>That means it's safe to paste things you'd never put into a random online tool —
+      internal logs, proprietary code, customer conversations.</p>
+    `,
+    hood: `<p>Run history is kept in the browser's session storage (cleared when the tab closes).
+      The only network call in the entire app is a developer-mode-only "install optional feature"
+      button that talks to <code>localhost</code> — your own machine.</p>`
+  },
+  {
+    id: "input", kind: "spine", icon: "📥", step: "Step 1",
+    title: "Add your text",
+    blurb: "Paste it, drop a file on it, or try a sample.",
+    body: `
+      <p>Getting text in works the way you'd hope:</p>
+      <ul>
+        <li><strong>Paste</strong> anything — an error log, source code, a JSON data file, a chat
+        transcript, meeting notes, documentation.</li>
+        <li><strong>Drag &amp; drop a file</strong> onto the editor. Plain text works out of the box;
+        PDF and Word documents work if the optional document-parsing extra is installed.</li>
+        <li><strong>Load a sample</strong> — five realistic built-in examples (noisy incident logs,
+        verbose code, a long runbook, a repetitive chat, a JSON event stream) so you can try the
+        whole product in one click without hunting for your own material.</li>
+      </ul>
+      <p>As you type or paste, a live counter shows characters, words, lines and — most importantly —
+      <strong>tokens</strong>, so you can see the size of the problem immediately.</p>
+      <div class="example"><div class="exlabel">Try it</div>
+      Click <em>Load sample → Incident logs</em> in the app, and you'll see ~4,000 tokens of messy
+      log output ready to shrink.</div>
+    `,
+    hood: `<p>The editor is a syntax-highlighting code editor (CodeMirror) by default, with a
+      plain-textarea fallback you can switch to in Settings. Token counting is deferred so even a
+      600&nbsp;KB paste keeps typing smooth.</p>`
+  },
+  {
+    id: "analyze", kind: "spine", icon: "🔍", step: "Step 2",
+    title: "It reads & measures",
+    blurb: "Counts the tokens and sizes up the job.",
+    body: `
+      <p>The moment you click <strong>Optimize context</strong>, miserly measures what you gave it:
+      how many tokens, lines and words, how much repetition, how complex the content looks.</p>
+      <p>This baseline matters because everything miserly reports at the end —
+      <em>"you saved 39%"</em>, <em>"this now costs $0.003 instead of $0.005"</em> — is a
+      <strong>real before-vs-after measurement</strong>, not a guess. It counts before, it counts
+      after, it shows you the difference.</p>
+      <div class="example"><div class="exlabel">Honesty rule</div>
+      If miserly is using its fast estimate instead of the exact token counter, every number is
+      marked with a <code>~</code> and the footer says so plainly. It never dresses an estimate up
+      as an exact figure.</div>
+    `,
+    hood: `<p>Base counts are OpenAI-tokenizer-equivalent. Selecting a different AI model applies a
+      per-family scaling factor (labeled as an approximation in the UI) since each provider
+      tokenizes slightly differently.</p>`
+  },
+  {
+    id: "detect", kind: "spine", icon: "🧭", step: "Step 3",
+    title: "It figures out what you gave it",
+    blurb: "Logs? Code? Data? Chat? Each is treated differently.",
+    body: `
+      <p>You can't shrink a poem the way you shrink a spreadsheet. So before touching anything,
+      miserly classifies your text line by line: <strong>log output, source code, JSON data,
+      a stack trace, a chat transcript, formatted documentation, or ordinary prose</strong> —
+      and often a mix of several.</p>
+      <p>This is also the product's most important <strong>safety system</strong>. The document is
+      split into typed regions, and every shrinking tool declares which types it's allowed to
+      touch. A tool built for trimming prose is <em>physically prevented</em> from ever seeing
+      your code or data — so it can't mangle them.</p>
+      <div class="example"><div class="exlabel">For example</div>
+      Paste a bug report that contains a paragraph of description, a JSON payload and a stack
+      trace. The paragraph gets summarized, the JSON gets compacted (never rewritten), and the
+      stack trace gets its repetitive middle frames folded — three different treatments, one
+      document, nothing damaged.</div>
+    `,
+    hood: `<p>A whole-document JSON parse probe catches pure JSON files up front. The line
+      classifier is "protected by default": anything it can't confidently identify (bare numbers
+      in an array, keyword-less Python lines, CSV rows) inherits the type of its structured
+      neighbors rather than being treated as free-for-all prose. Numbers too precise for exact
+      round-tripping (like 19-digit database IDs) are detected and left untouched.</p>`
+  },
+  {
+    id: "plan", kind: "spine", icon: "🗺️", step: "Step 4",
+    title: "It makes a plan",
+    blurb: "Picks the right tools for your goal and budget.",
+    body: `
+      <p>Based on what it detected, miserly assembles a <strong>pipeline</strong>: an ordered
+      sequence of shrinking tools suited to your content. Two dials shape the plan:</p>
+      <ul>
+        <li><strong>Your goal</strong> — Balanced, Max compression, Lowest cost, Fastest, or
+        Highest quality. "Highest quality" shrinks gently; "Max compression" squeezes hard.</li>
+        <li><strong>Your token budget</strong> — a target size (say, "fit this into 8,000 tokens").
+        miserly then compresses <em>exactly as much as needed and no more</em>: if a gentle pass
+        already fits the budget, it stops there to preserve quality. If even its strongest effort
+        can't reach the number, it tells you honestly instead of pretending.</li>
+      </ul>
+      <p>The plan is fully explained on screen — which tools were chosen, in what order, and
+      <em>why</em> — before and after it runs. No black box.</p>
+    `,
+    hood: `<p>Budget fitting is closed-loop: the pipeline is executed silently at increasing
+      strength levels with a binary search over the aggressiveness floor, measuring real token
+      counts each time — the plan the animation then shows you is the one that was actually
+      verified to fit. If the normal plan can't reach the budget, an exhaustive re-plan considers
+      every eligible tool before giving up. A goal of "Highest quality" refuses to escalate and
+      warns instead.</p>`
+  },
+  {
+    id: "controls", kind: "branch", parent: "plan", icon: "🎛️",
+    title: "The three dials you control",
+    blurb: "",
+    body: `
+      <p>miserly keeps its controls to three things a non-expert can reason about:</p>
+      <ul>
+        <li><strong>Goal</strong> — what you care about most: smallest possible size, lowest cost,
+        speed, or maximum fidelity. One dropdown.</li>
+        <li><strong>Token budget</strong> — the size it should aim for (presets like 4K / 8K / 16K).
+        Useful because AI models have hard size limits and pricing tiers.</li>
+        <li><strong>AI model</strong> — which model you plan to send the result to (GPT-5, Claude,
+        Gemini, Llama and others). This drives the cost math: each model has different prices,
+        so "you save $X" is computed against <em>your</em> model, and switching models re-computes
+        instantly.</li>
+      </ul>
+      <p>Everything else — which tools run, in what order, how hard — is planned automatically.
+      Unless you want to take the wheel, which brings us to the Pipeline Builder…</p>
+    `,
+    hood: ``
+  },
+  {
+    id: "builder", kind: "branch", parent: "plan", icon: "🔧",
+    title: "Pipeline Builder — build your own recipe",
+    blurb: "",
+    body: `
+      <p>For people who want manual control, the <strong>Pipeline Builder</strong> opens the hood:</p>
+      <ul>
+        <li>See every available shrinking tool, with a plain description of what it does.</li>
+        <li>Switch from <strong>Auto</strong> to <strong>Manual</strong> and toggle tools on or off,
+        reorder them, and set each one's <strong>aggressiveness</strong> with a slider (gentle → fierce).</li>
+        <li>Watch a <strong>live projection</strong> of the outcome — "13.6K → 2.5K tokens" —
+        update as you fiddle, before you commit to a run.</li>
+        <li>Override the content-type detection if you know better than the classifier.</li>
+      </ul>
+      <p>Manual mode is a promise: your recipe runs <em>exactly</em> as you arranged it. miserly
+      never silently overrides a manual pipeline — even to hit a budget.</p>
+    `,
+    hood: `<p>Each tool's slider maps to a keep-ratio within that tool's honest operating range.
+      The projection scales by how much of your document each tool is actually allowed to touch
+      (its safe content types), so it doesn't promise savings on regions a tool will skip.</p>`
+  },
+  {
+    id: "compress", kind: "spine", icon: "🗜️", step: "Step 5",
+    title: "It shrinks the text",
+    blurb: "Eleven specialist tools, each safe in its own lane.",
+    body: `
+      <p>Now the pipeline runs, stage by stage, and you watch it live — each tool reports what it
+      did and how many tokens it removed. The specialists include:</p>
+      <ul>
+        <li><strong>Tidy the structure</strong> — compact pretty-printed JSON onto single lines,
+        strip decorative whitespace, normalize noisy timestamps and IDs.</li>
+        <li><strong>Fold repetition</strong> — collapse duplicate lines into one line with a
+        "<code>⟲ ×212</code>" marker, and fold the repetitive middle of long stack traces.</li>
+        <li><strong>Trim ceremony</strong> — drop code comments and blank-line padding (never the
+        code itself).</li>
+        <li><strong>Prune low-value lines</strong> — clear out heartbeat log lines and separators
+        that carry no information.</li>
+        <li><strong>Summarize prose</strong> — keep the lead sentence of every paragraph plus the
+        most information-dense sentences, drop the filler words.</li>
+      </ul>
+      <p>Every removal is <strong>annotated, not silent</strong> — folded repetition leaves a
+      visible marker, truncated traces say "<em>… 12 frames omitted …</em>" — so the AI (and you)
+      can see that something was compacted rather than losing it invisibly.</p>
+      <div class="example"><div class="exlabel">Safety, again</div>
+      Every tool declares the content types it may touch. The prose summarizer is never handed
+      your JSON. The dedupe tool is never handed your code's closing braces. If a tool crashes,
+      that stage is skipped and the pipeline continues — one bad tool can't ruin the run.</div>
+    `,
+    hood: `<p>11 optimizer plugins: Headroom (structural minify), Claw (log pruning),
+      Ponytail (code ceremony), Toonify (data restructuring), Summarizer / RECOMP / Nuggets
+      (extractive summarization tiers), LLMLingua &amp; LongLLMLingua (word-level pruning,
+      research-inspired), 500xCompressor &amp; xRAG (aggressive summarize-then-prune,
+      research-inspired). Each carries a provenance badge — <em>native</em> (miserly's own real
+      algorithm) vs <em>reference-sim</em> (an honest approximation inspired by a published
+      technique) — shown in the UI so nobody mistakes a simulation for the real research model.</p>`
+  },
+  {
+    id: "watch", kind: "branch", parent: "compress", icon: "⏯️",
+    title: "Watch it, skip it, or stop it",
+    blurb: "",
+    body: `
+      <p>The run plays as a short animated pipeline — analysis → detection → planning →
+      compression → validation — so you can see each stage do its work. You're in control the
+      whole time:</p>
+      <ul>
+        <li><strong>Skip</strong> — jump straight to the result. The animation is presentation;
+        the actual computation takes milliseconds.</li>
+        <li><strong>Cancel</strong> — abandon the run and keep your previous result untouched.</li>
+        <li><strong>Keep working</strong> — the previous report stays visible while a new run
+        plays, so you can compare. And if you edit the input mid-run, the stale run cancels itself
+        instead of dumping an out-of-date result on you.</li>
+      </ul>
+      <p>Turning animations off in Settings makes every run effectively instant — the tool
+      respects people who just want the answer.</p>
+    `,
+    hood: ``
+  },
+  {
+    id: "validate", kind: "spine", icon: "✅", step: "Step 6",
+    title: "It double-checks the result",
+    blurb: "Did anything important get lost? Measured, not assumed.",
+    body: `
+      <p>Compression is only worth it if the meaning survives. So after shrinking, miserly
+      <strong>measures</strong> the result against the original:</p>
+      <ul>
+        <li><strong>Key facts check</strong> — names, error codes, numbers and identifiers from the
+        original are looked up in the output. If important ones went missing, you're warned.</li>
+        <li><strong>Word retention</strong> — how much of the original's distinct vocabulary
+        survived.</li>
+        <li><strong>Overlap score</strong> — an overall similarity measure between before and after.</li>
+      </ul>
+      <p>The result is a clear verdict — <strong>Accepted</strong> or <strong>Flagged</strong> —
+      plus plain-language warnings like <em>"Only 54% of key entities were found in the output —
+      check nothing important was dropped."</em></p>
+      <div class="example"><div class="exlabel">Honesty rule</div>
+      These scores are computed from your actual text, never invented. A run that changed nothing
+      scores ~100% similar. A brutal 90% compression will honestly show a lower overlap — because
+      that's the truth of what happened.</div>
+    `,
+    hood: `<p>Entity matching is word-boundary anchored (so "Error" doesn't falsely match
+      "Errors"), and the checker knows about miserly's own fold markers so the engine isn't
+      penalized for its own annotations. It's honest lexical measurement — the roadmap adds
+      optional semantic (embedding-based) validation for meaning-level checking.</p>`
+  },
+  {
+    id: "report", kind: "spine", icon: "📊", step: "Step 7",
+    title: "Your savings report",
+    blurb: "Tokens saved, dollars saved, quality verdict — all measured.",
+    body: `
+      <p>The finale is a full report card:</p>
+      <ul>
+        <li><strong>Before → After</strong> — original vs optimized token counts, the compression
+        ratio, and tokens saved.</li>
+        <li><strong>Money</strong> — what this text costs to send to your chosen AI model, before
+        and after, and the saving per call. Sub-cent savings are also shown per 1,000 calls —
+        because that's how the pennies become real money.</li>
+        <li><strong>Quality</strong> — the validation verdict, retention scores and any warnings.</li>
+        <li><strong>Budget picture</strong> — a chart of where your tokens go by content type
+        (logs vs code vs data vs prose), before and after, computed from the actual text.</li>
+        <li><strong>Stage breakdown</strong> — exactly what each tool contributed, with its
+        measured token delta and notes.</li>
+      </ul>
+      <div class="example"><div class="exlabel">Honesty rule</div>
+      If a run ever makes the text <em>more</em> expensive (it can happen — fold markers add a few
+      characters to already-tiny inputs), the report says <strong>"Costs more"</strong> in red.
+      It will never hide a bad result behind a green $0.00.</div>
+    `,
+    hood: `<p>Prices are a maintained per-model table (labeled as estimates in the UI), including
+      long-context pricing tiers (Gemini bills the whole request higher past 200K tokens) and
+      prompt-cache economics — there's an analyzer that can tell you when <em>caching</em> a stable
+      prompt beats compressing it, including the cache-write premium on the first call.</p>`
+  },
+  {
+    id: "honesty", kind: "branch", parent: "report", icon: "🤝",
+    title: "The honesty rulebook",
+    blurb: "",
+    body: `
+      <p>miserly's defining principle: <strong>never show a number you didn't measure.</strong>
+      It shows up everywhere:</p>
+      <ul>
+        <li>Token counts are real before/after measurements. Estimated counts wear a visible
+        <code>~</code>.</li>
+        <li>Quality scores are computed from your text, not conjured to look reassuring.</li>
+        <li>Runs that increase cost say so, in red.</li>
+        <li>Every optimizer carries a provenance badge: miserly's own algorithm vs an approximation
+        inspired by published research. Simulations are never dressed up as the real thing.</li>
+        <li>The plan explains itself — every stage states why it was chosen.</li>
+        <li>Projections are labeled "rough projection"; the real figure is always the measured one.</li>
+      </ul>
+      <p>For a tool whose entire job is claiming "you saved money", this discipline is the product.</p>
+    `,
+    hood: ``
+  },
+  {
+    id: "output", kind: "spine", icon: "📤", step: "Step 8",
+    title: "Take the result away",
+    blurb: "Copy it, download it, tweak it — then send it to your AI.",
+    body: `
+      <p>The optimized text sits in an output editor next to your original, ready to use:</p>
+      <ul>
+        <li><strong>Copy</strong> to clipboard or <strong>download</strong> as a file.</li>
+        <li><strong>Edit it by hand</strong> — the token count, cost figures and budget chart all
+        re-compute live against your edited version, clearly marked with an "edited" chip. A
+        one-click <strong>Revert</strong> restores the engine's output.</li>
+        <li><strong>Run history</strong> — your recent runs are kept in a sidebar for this browser
+        session. Click any one to restore the full report, the input, and even the exact pipeline
+        recipe that produced it.</li>
+      </ul>
+      <p>Then paste the smaller text into ChatGPT, Claude, your RAG pipeline, your agent framework —
+      anywhere tokens cost money.</p>
+    `,
+    hood: `<p>History is capped at 20 entries in session storage (never uploaded, cleared with the
+      tab), and each entry snapshots the pipeline configuration as it was when the run started —
+      so restoring an old run faithfully restores its recipe.</p>`
+  },
+  {
+    id: "settings", kind: "branch", parent: "output", icon: "⚙️",
+    title: "Settings & optional extras",
+    blurb: "",
+    body: `
+      <p>miserly is deliberately <strong>lean by default</strong> — a small, fast install. Heavier
+      abilities are opt-in extras you can add from the Settings panel:</p>
+      <ul>
+        <li><strong>Exact tokenizer</strong> (~55&nbsp;MB) — replaces the fast estimate with
+        to-the-token-exact counts.</li>
+        <li><strong>Document parsing</strong> (~20&nbsp;MB) — lets you drop PDF and Word files
+        straight onto the editor.</li>
+        <li><strong>Toggles</strong> — animations on/off, rich code editor vs plain text box, cost
+        panel, budget chart, sample documents, light/dark theme.</li>
+      </ul>
+      <p>The Settings panel shows exactly what's installed, what each extra costs in download size,
+      and installs them with one click (in developer mode). Features you haven't installed simply
+      fall back gracefully — the app never breaks for lacking an extra.</p>
+    `,
+    hood: `<p>Under the hood this is a three-layer feature-flag system: build-time availability
+      (is the package installed?), environment defaults, and runtime toggles — with generated
+      adapter code so the app compiles cleanly whether or not a heavy optional package exists.</p>`
+  },
+  {
+    id: "who", kind: "spine", icon: "🎯", step: "Who it's for",
+    title: "Who uses this, and what's next",
+    blurb: "The people it helps today and where it's heading.",
+    body: `
+      <p><strong>Today</strong>, miserly is for anyone who repeatedly sends big text to AI and
+      pays for it:</p>
+      <ul>
+        <li><strong>Support &amp; ops engineers</strong> shrinking logs before asking AI to diagnose them.</li>
+        <li><strong>Developers</strong> compacting code, configs and stack traces for AI code assistants.</li>
+        <li><strong>AI builders</strong> trimming RAG bundles, tool outputs and conversation history
+        in their apps and agents.</li>
+        <li><strong>Prompt writers</strong> auditing where their token budget actually goes.</li>
+      </ul>
+      <p><strong>Next</strong> on the roadmap: a command-line version and an MCP server (so AI
+      agents can call miserly automatically), a stage-by-stage diff viewer, pinned "never touch
+      this" regions, real research-grade compression models running locally, and a benchmark
+      harness that keeps every optimizer's claims calibrated against measurements.</p>
+      <p style="margin-top:14px;color:var(--text-faint)">That's the whole product. Click around the
+      map, or open the studio and shrink something. 🪙</p>
+    `,
+    hood: ``
+  },
+];
+
+/* =====================================================================
+   TAB 2 — Integrations & services. Grouped cards; kind "card" keeps them
+   out of the flow spine. Model cards are generated from MODEL_DATA so the
+   numbers live in one place (mirroring src/engine/pricing.ts).
+   ===================================================================== */
+const GROUPS = [
+  { id: "addons", title: "Optional add-ons · bigger downloads, off by default",
+    note: "miserly installs lean. These two extras are real downloads, so YOU decide whether they're worth the disk space — everything works without them, just less precisely." },
+  { id: "builtin", title: "Built-in features · on by default, toggle any time",
+    note: "No downloads — these ship with the app and can be flipped on/off in Settings (or with an environment flag)." },
+  { id: "models", title: "Supported AI models · the cost catalog",
+    note: "The models miserly can price your text against. Prices are estimates in USD per 1 million tokens (in = what you send, out = what the model writes back) and update instantly when you switch models in the report." },
+  { id: "plumbing", title: "Under the floorboards",
+    note: "The machinery that makes the optional pieces safe and honest." },
+];
+
+const FAMILY_NOTE = "miserly counts tokens the OpenAI way, then applies a small per-brand correction factor, because every AI brand chops text into tokens slightly differently. The factor is an approximation and the app says so.";
+
+const MODEL_DATA = [
+  { id: "gpt-5", label: "GPT-5", provider: "OpenAI", icon: "🟢", inPerM: 1.25, outPerM: 10,
+    window: "400,000", family: "openai", factor: "1.00 (the baseline)", cacheRead: 0.125,
+    notes: "The default model in miserly's cost panel. Cached input re-reads cost ≈ 10% of the normal input price." },
+  { id: "gpt-5-mini", label: "GPT-5 Mini", provider: "OpenAI", icon: "🟢", inPerM: 0.25, outPerM: 2,
+    window: "400,000", family: "openai", factor: "1.00 (the baseline)", cacheRead: 0.025,
+    notes: "The budget OpenAI option — a fifth of GPT-5's price with the same huge window." },
+  { id: "claude-opus-4", label: "Claude Opus 4", provider: "Anthropic", icon: "🟠", inPerM: 15, outPerM: 75,
+    window: "200,000", family: "anthropic", factor: "1.08 (≈8% more tokens)", cacheRead: 1.5, cacheWrite: 18.75,
+    notes: "The priciest model in the catalog — which makes compression savings the most dramatic here. Anthropic caching: reads cost ≈ 10% of input, but WRITING to the cache costs 1.25× input on the first call. miserly's cache advisor accounts for both." },
+  { id: "claude-sonnet-4", label: "Claude Sonnet 4", provider: "Anthropic", icon: "🟠", inPerM: 3, outPerM: 15,
+    window: "200,000", family: "anthropic", factor: "1.08 (≈8% more tokens)", cacheRead: 0.3, cacheWrite: 3.75,
+    notes: "Anthropic's workhorse tier. Same cache read/write structure as Opus at a fifth of the price." },
+  { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "Google", icon: "🔵", inPerM: 1.25, outPerM: 10,
+    window: "1,000,000", family: "gemini", factor: "0.98 (≈2% fewer tokens)", cacheRead: 0.31,
+    longCtx: "⚠️ Long-context surcharge: once a request crosses 200,000 tokens, Google bills the WHOLE request at $2.50 in / $15 out — double the normal rate. miserly's cost math honors this tier, which is exactly where shrinking below the threshold saves the most.",
+    notes: "The biggest window in the catalog (a million tokens ≈ a long novel per request)." },
+  { id: "gemini-flash", label: "Gemini 2.5 Flash", provider: "Google", icon: "🔵", inPerM: 0.3, outPerM: 2.5,
+    window: "1,000,000", family: "gemini", factor: "0.98 (≈2% fewer tokens)", cacheRead: 0.075,
+    notes: "Google's fast/cheap tier with the same million-token window." },
+  { id: "qwen-max", label: "Qwen Max", provider: "Alibaba", icon: "🟣", inPerM: 1.6, outPerM: 6.4,
+    window: "32,768", family: "qwen", factor: "1.06 (≈6% more tokens)",
+    notes: "The smallest window in the catalog — with only ~32K tokens of room, fitting your text under budget matters more here than anywhere else." },
+  { id: "llama-3.1-405b", label: "Llama 3.1 405B", provider: "Meta", icon: "🔷", inPerM: 0.9, outPerM: 0.9,
+    window: "128,000", family: "llama", factor: "1.10 (≈10% more tokens)",
+    notes: "The open-weights giant, priced at typical hosted rates. Unusually, input and output cost the same." },
+  { id: "mistral-large", label: "Mistral Large", provider: "Mistral", icon: "🟡", inPerM: 2, outPerM: 6,
+    window: "128,000", family: "mistral", factor: "1.12 (≈12% more tokens)",
+    notes: "Mistral's flagship. Its tokenizer is the least efficient in the catalog for typical English text — the same document costs ~12% more tokens than on OpenAI." },
+  { id: "deepseek-v3", label: "DeepSeek V3", provider: "DeepSeek", icon: "⚪", inPerM: 0.27, outPerM: 1.1,
+    window: "128,000", family: "deepseek", factor: "1.05 (≈5% more tokens)", cacheRead: 0.027,
+    notes: "The cheapest model in the catalog. Context caching brings repeat-prompt reads down to ≈10% of input price." },
+];
+
+function money(v) { return "$" + (v < 0.01 ? v.toFixed(4) : v < 1 ? String(v) : String(v)); }
+
+function modelBody(m) {
+  const per10k = (m.inPerM / 100);
+  return `
+    <p><strong>${m.label}</strong> is ${m.provider}'s ${m.id === "gpt-5" ? "flagship — and miserly's default pricing model" : "model"} in the cost catalog. When you pick it in the report, every dollar figure re-computes against these numbers:</p>
+    <ul>
+      <li><strong>Input price:</strong> ${money(m.inPerM)} per 1M tokens — this is the number compression saves against.</li>
+      <li><strong>Output price:</strong> ${money(m.outPerM)} per 1M tokens (what the model writes back — miserly doesn't change this).</li>
+      <li><strong>Context window:</strong> ${m.window} tokens — the hard ceiling on how much you can send at once.</li>
+      ${m.cacheRead !== undefined ? `<li><strong>Cached input:</strong> ${money(m.cacheRead)} per 1M — re-sending an unchanged prompt prefix is billed at this discounted rate.${m.cacheWrite !== undefined ? ` First-time cache <em>writes</em> cost ${money(m.cacheWrite)} per 1M.` : ""}</li>` : ""}
+      <li><strong>Token correction factor:</strong> ${m.factor}.</li>
+    </ul>
+    ${m.longCtx ? `<div class="example"><div class="exlabel">Pricing tier</div>${m.longCtx}</div>` : ""}
+    <div class="example"><div class="exlabel">Feel for the money</div>
+    Sending 10,000 tokens (≈ 7,500 words) to ${m.label} costs about <strong>$${per10k.toFixed(per10k < 0.01 ? 4 : 3)}</strong> in input alone — per request. Shrink it 40% and you keep 40% of that, every single time.</div>
+    ${m.notes ? "<p>" + m.notes + "</p>" : ""}
+  `;
+}
+
+const INTEGRATIONS = [
+  /* ---------- optional add-ons ---------- */
+  {
+    id: "svc-tokenizer", kind: "card", tab: "integrations", group: "addons",
+    icon: "🔢", title: "Exact token counter",
+    chips: [["off", "OFF by default"], ["dl", "~55 MB download"], ["off", "not installed right now"]],
+    crumb: "Optional add-on · package: gpt-tokenizer",
+    body: `
+      <p>Out of the box, miserly estimates token counts at roughly <strong>4 characters per
+      token</strong> — fast, decent, and every estimated number visibly wears a <code>~</code>.
+      This add-on replaces the estimate with the <strong>real thing</strong>: the exact same
+      token-counting math OpenAI uses to bill you.</p>
+      <ul>
+        <li><strong>Requires:</strong> one package — <code>gpt-tokenizer</code>.</li>
+        <li><strong>Size:</strong> ~55&nbsp;MB on disk (the token tables are big — that's the whole
+        reason it's optional).</li>
+        <li><strong>What changes:</strong> the <code>~</code> prefixes disappear, the footer switches
+        from "token counts are estimated" to "exact token counts", and savings figures become
+        billing-precise.</li>
+        <li><strong>Without it:</strong> everything still works — numbers are just estimates,
+        clearly labeled as such.</li>
+      </ul>
+      <div class="example"><div class="exlabel">How to turn it on</div>
+      Three ways, pick one: run <code>npm run setup</code> and tick it in the wizard · set
+      <code>VITE_FEATURE_ACCURATE_TOKENIZER=true</code> in the <code>.env</code> file · or click
+      <strong>Install</strong> next to it in Settings → Tools &amp; Features (developer mode).
+      Once installed, it's a live on/off toggle in Settings.</div>
+    `,
+    hood: `<p>The importing code is materialized from a template only when the package is actually
+      installed, so the app builds cleanly either way. Counts are OpenAI-base; other providers get
+      the per-family correction factor. The report stamps which counter produced its numbers, so a
+      run made with the estimate never silently re-labels itself as exact.</p>`
+  },
+  {
+    id: "svc-docparse", kind: "card", tab: "integrations", group: "addons",
+    icon: "📄", title: "PDF & Word reading",
+    chips: [["off", "OFF by default"], ["dl", "~20 MB download"], ["off", "not installed right now"]],
+    crumb: "Optional add-on · packages: pdfjs-dist + mammoth",
+    body: `
+      <p>By default, dragging a file onto the editor works for <strong>plain-text files</strong>
+      (.txt, .md, .log, .json, source code…). This add-on teaches the drop zone to read binary
+      documents too:</p>
+      <ul>
+        <li><strong>PDF</strong> — text is extracted with <code>pdfjs-dist</code>, Mozilla's PDF
+        engine (the same one inside Firefox's PDF viewer).</li>
+        <li><strong>Word (.docx)</strong> — converted to clean text with <code>mammoth</code>.</li>
+        <li><strong>Size:</strong> ~20&nbsp;MB for the pair.</li>
+        <li><strong>Privacy holds:</strong> parsing happens in your browser like everything else —
+        the PDF engine's worker is bundled locally, never fetched from a CDN, and the document
+        never leaves your machine.</li>
+      </ul>
+      <div class="example"><div class="exlabel">How to turn it on</div>
+      Same three ways as the tokenizer: <code>npm run setup</code> ·
+      <code>VITE_FEATURE_DOCUMENT_PARSING=true</code> in <code>.env</code> · or Settings →
+      <strong>Install</strong> (developer mode).</div>
+      <p><strong>Without it:</strong> dropping a PDF simply tells you the feature isn't installed —
+      nothing breaks.</p>
+    `,
+    hood: ``
+  },
+
+  /* ---------- built-in toggles ---------- */
+  {
+    id: "svc-animations", kind: "card", tab: "integrations", group: "builtin",
+    icon: "✨", title: "Animations",
+    chips: [["on", "ON by default"], ["on", "no download"]],
+    crumb: "Built-in feature · env flag: VITE_FEATURE_ANIMATIONS",
+    body: `
+      <p>The animated pipeline you watch during a run — stages lighting up, counters ticking —
+      is presentation, not computation (the real work takes milliseconds). This toggle controls it:</p>
+      <ul>
+        <li><strong>On</strong> — runs play as a short, skippable animation (~3 seconds). Great for
+        understanding what's happening the first few times.</li>
+        <li><strong>Off</strong> — runs are effectively instant. Great once you're in a
+        tweak-and-rerun loop and just want answers.</li>
+        <li>Your operating system's <strong>"reduce motion"</strong> preference is respected
+        automatically, and a <strong>Skip</strong> button fast-forwards any individual run.</li>
+      </ul>
+    `,
+    hood: ``
+  },
+  {
+    id: "svc-editor", kind: "card", tab: "integrations", group: "builtin",
+    icon: "🖋️", title: "Rich code editor",
+    chips: [["on", "ON by default"], ["on", "no download"]],
+    crumb: "Built-in feature · env flag: VITE_FEATURE_RICH_EDITOR",
+    body: `
+      <p>Both text panes (your input, and the optimized output) use a proper code editor —
+      <strong>CodeMirror</strong>, the same engine behind many developer tools:</p>
+      <ul>
+        <li>Syntax highlighting for Markdown, JSON and JavaScript-family code.</li>
+        <li>Line numbers, proper indentation handling, smooth performance on large documents.</li>
+      </ul>
+      <p>Turning it <strong>off</strong> swaps in a bare-bones text box — no colors, but the
+      absolute fastest option for very large pastes on modest hardware.</p>
+    `,
+    hood: ``
+  },
+  {
+    id: "svc-cost", kind: "card", tab: "integrations", group: "builtin",
+    icon: "💰", title: "Cost comparison panel",
+    chips: [["on", "ON by default"], ["on", "no download"]],
+    crumb: "Built-in feature · env flag: VITE_FEATURE_COST_COMPARISON",
+    body: `
+      <p>The panel that turns tokens into money: what this text costs to send to your chosen AI
+      model <strong>before</strong> and <strong>after</strong> optimization, the saving per call,
+      and — because single-call savings are often fractions of a cent — the same figure
+      <strong>per 1,000 calls</strong>, where it becomes real money.</p>
+      <p>It re-computes instantly when you switch models, and if a run ever makes the text more
+      expensive, it says <strong>"Costs more"</strong> in red rather than hiding it.</p>
+      <p>Turn it off if you only care about token counts, not dollars.</p>
+    `,
+    hood: ``
+  },
+  {
+    id: "svc-budget", kind: "card", tab: "integrations", group: "builtin",
+    icon: "📊", title: "Context budget chart",
+    chips: [["on", "ON by default"], ["on", "no download"]],
+    crumb: "Built-in feature · env flag: VITE_FEATURE_CONTEXT_BUDGET",
+    body: `
+      <p>A pair of stacked bars showing <strong>where your tokens actually go</strong>, by content
+      type — how much of your document is log noise vs code vs data vs prose — before and after
+      optimization.</p>
+      <p>It's measured from the real text (each line is classified and its tokens counted), so
+      it's an honest answer to "what is actually eating my budget?" — often the first genuinely
+      surprising thing new users see.</p>
+    `,
+    hood: ``
+  },
+  {
+    id: "svc-samples", kind: "card", tab: "integrations", group: "builtin",
+    icon: "🧪", title: "Sample documents",
+    chips: [["on", "ON by default"], ["on", "no download"]],
+    crumb: "Built-in feature · env flag: VITE_FEATURE_SAMPLE_DOCUMENTS",
+    body: `
+      <p>Five realistic, one-click examples so anyone can experience the whole product in thirty
+      seconds without hunting for material:</p>
+      <ul>
+        <li><strong>Incident logs + stack trace</strong> — noisy service logs with repetition.</li>
+        <li><strong>TypeScript service</strong> — verbose code with comments and boilerplate.</li>
+        <li><strong>Knowledge base / runbook</strong> — a long Markdown document.</li>
+        <li><strong>Chat history</strong> — a repetitive multi-turn conversation.</li>
+        <li><strong>Kubernetes events (JSON)</strong> — a stream of near-duplicate data records.</li>
+      </ul>
+      <p>Each one is chosen to show off a different part of the engine. Teams embedding miserly
+      can switch them off for a cleaner UI.</p>
+    `,
+    hood: ``
+  },
+
+  /* ---------- model catalog (generated below) ---------- */
+
+  /* ---------- plumbing ---------- */
+  {
+    id: "svc-installer", kind: "card", tab: "integrations", group: "plumbing",
+    icon: "🧩", title: "The install system",
+    chips: [["on", "always active"], ["price", "3 ways to install"]],
+    crumb: "Infrastructure · scripts/setup.mjs + Settings panel",
+    body: `
+      <p>The machinery behind "lean by default". Every optional feature is described in
+      <strong>one catalog file</strong>, and three doors lead to it:</p>
+      <ul>
+        <li><strong>The wizard</strong> — <code>npm run setup</code> walks you through every
+        feature with sizes and descriptions, installs what you tick, and writes your choices to
+        the <code>.env</code> file.</li>
+        <li><strong>The flags</strong> — <code>VITE_FEATURE_*</code> variables in <code>.env</code>
+        set each feature's default (there's a documented <code>.env.example</code> to copy).</li>
+        <li><strong>The Settings panel</strong> — shows every feature with its install state and
+        size; in developer mode an <strong>Install</strong> button downloads an add-on and restarts,
+        no terminal needed.</li>
+      </ul>
+      <p>Whatever door you use, the same rule holds: features you don't have simply fall back
+      gracefully. The app never breaks for lacking an extra.</p>
+    `,
+    hood: `<p>The in-app install endpoint only exists in dev mode, only accepts requests from
+      localhost origins, validates the feature name against the catalog whitelist, and serializes
+      concurrent installs. Build-time code generation materializes an adapter per installed
+      package so the production bundle never references a package that isn't there.</p>`
+  },
+  {
+    id: "svc-cache", kind: "card", tab: "integrations", group: "plumbing",
+    icon: "💾", title: "Prompt-cache advisor",
+    chips: [["on", "built into the cost math"], ["price", "knows 4 providers' cache prices"]],
+    crumb: "Infrastructure · the honest counterweight",
+    body: `
+      <p>Here's a truth most compression tools won't tell you: <strong>sometimes you shouldn't
+      compress.</strong> Major AI providers offer <em>prompt caching</em> — if you send the same
+      prompt prefix repeatedly (a system prompt, a stable document), re-reads are billed at
+      10–25% of the normal price. Compressing a cached prefix <em>changes</em> it, which
+      breaks the cache and can cost you money overall.</p>
+      <p>miserly's cost model knows the cache prices for OpenAI, Anthropic, Google and DeepSeek —
+      including Anthropic's premium for <em>writing</em> to the cache — and can tell you the
+      break-even: how often a prompt must repeat before caching beats compressing.</p>
+      <div class="example"><div class="exlabel">Why this is here</div>
+      A tool whose pitch is "honest numbers" has to be honest even when the answer is "don't use
+      me for this one — cache it instead."</div>
+    `,
+    hood: ``
+  },
+];
+
+// Generate one card per AI model from the data table.
+for (const m of MODEL_DATA) {
+  INTEGRATIONS.push({
+    id: "model-" + m.id, kind: "card", tab: "integrations", group: "models",
+    icon: m.icon, title: m.label, provider: m.provider,
+    chips: [["price", "$" + m.inPerM + " in · $" + m.outPerM + " out / 1M"], ["off", m.window + " token window"]],
+    crumb: "AI model · " + m.provider + " · prices are estimates",
+    body: modelBody(m),
+    hood: m.id === "gpt-5" ? "<p>" + FAMILY_NOTE + "</p>" : "",
+  });
+}
+
+NODES.push(...INTEGRATIONS);
+
+/* =====================================================================
+   TAB 3 — The optimizers. One card per compression plugin, generated
+   from OPTIMIZER_DATA (mirroring src/engine/plugins/*). Each optimizer
+   is a recipe composed from the shared transform toolbox.
+   ===================================================================== */
+const OPT_GROUPS = [
+  { id: "og-structural", title: "Structure cleaners · logs, data & stack traces",
+    note: "The gentlest family: they reorganize and de-duplicate without touching wording. Great first stages for machine output." },
+  { id: "og-code", title: "Code specialist",
+    note: "Understands that code is not prose — it trims around the logic, never through it." },
+  { id: "og-words", title: "Word-level pruners · prose & chat",
+    note: "These thin the wording itself, dropping filler words a model doesn't need. Inspired by published research, approximated honestly." },
+  { id: "og-summary", title: "Summarizers · documents & notes",
+    note: "Sentence-level: they keep the sentences that carry the meaning and drop the rest. Every paragraph always keeps its lead sentence." },
+  { id: "og-rag", title: "RAG specialists · retrieved passages",
+    note: "For AI apps that fetch reference passages: squeeze the evidence hard, keep the facts." },
+  { id: "og-shared", title: "The shared machinery every optimizer is built from",
+    note: "The optimizers above are thin recipes — the real work happens in these two shared systems." },
+];
+
+function cutRange(range) {
+  const hi = Math.round((1 - range[0]) * 100);
+  const lo = Math.round((1 - range[1]) * 100);
+  return "cuts " + lo + "–" + hi + "%";
+}
+
+const OPTIMIZER_DATA = [
+  {
+    id: "headroom", label: "Headroom", icon: "🧹", group: "og-structural", category: "structural",
+    range: [0.28, 0.5], prov: "sim", inspired: "the open-source “headroom” project",
+    typesShort: "logs · JSON · code · traces", quality: "the gentlest optimizer (0.97 base quality)",
+    what: "The workhorse first stage for machine output — logs, tool results, JSON dumps. It reorganizes structure without rewording anything, which is why the planner reaches for it first on almost every technical document.",
+    steps: [
+      "Normalize noise — long hex IDs, UUIDs and timestamps get shortened to consistent stand-ins.",
+      "Compact JSON — pretty-printed blocks collapse onto single lines (skipped entirely if the block holds a number too precise to round-trip safely, like a 19-digit ID).",
+      "Fold repeats — consecutive duplicate lines become one line with a “⟲ ×N” marker.",
+      "Trim stack traces — keeps the top frames (6 normally, 3 when the slider is above 70%) and notes how many were omitted.",
+      "Squeeze whitespace.",
+    ],
+    slider: "The slider mainly controls how ruthlessly stack traces are trimmed.",
+    example: "A Kubernetes event stream of 300 near-identical JSON records typically halves or better, with every unique fact intact.",
+  },
+  {
+    id: "toonify", label: "Toonify", icon: "🎞️", group: "og-structural", category: "structural",
+    range: [0.3, 0.6], prov: "native", inspired: "TOON (Token-Oriented Object Notation)",
+    typesShort: "JSON · logs · traces", quality: "very gentle (0.94 base quality)",
+    what: "The real TOON move: JSON pays for its keys over and over — every record in an array repeats every key name. Toonify re-encodes uniform record arrays as a TABLE: the keys are declared once in a header, and each record becomes one CSV row. Nested objects flatten into dot-path columns (address.city, stats.total_orders), so even deeply-shaped records qualify.",
+    steps: [
+      "Parse each JSON block (skipped entirely if it holds a number too precise to round-trip safely).",
+      "Encode it BOTH ways — TOON (unquoted keys, tables for record arrays) and plain minified JSON.",
+      "The calculator: measure the token count of each encoding and ship whichever is smaller — per block, and again per array (table form vs list form). Never assumed, always measured.",
+      "Fold duplicate lines across the whole document, collapse stack traces to their top 3 frames, squeeze whitespace.",
+    ],
+    slider: "Mostly fixed behavior — the encoding choice is driven by measured token counts, not the slider.",
+    honestyNote: "This is a real, native algorithm now — measured on a 5K-token enterprise JSON dataset it cut ~33% where plain minification managed ~15%. When a table would NOT beat minified JSON (irregular data), the calculator keeps the JSON — the note in the stage breakdown tells you which way it went.",
+    example: "A users array of 4 records with nested profiles becomes users[4]{id,username,email,profile.bio,…}: plus 4 data rows — every key name paid for exactly once.",
+  },
+  {
+    id: "claw", label: "Claw", icon: "🦀", group: "og-structural", category: "structural",
+    range: [0.4, 0.6], prov: "sim", inspired: null,
+    typesShort: "logs · mixed · traces — never JSON", quality: "moderate (0.88 base quality)",
+    what: "The aggressive member of the structural family: it deletes whole lines that carry no information — separators, heartbeat spam, tiny fragments — then de-duplicates what's left.",
+    steps: [
+      "Drop low-information lines at the slider's strength (bare numbers and heading underlines are always spared).",
+      "Fold duplicate lines document-wide with “⟲ ×N” markers.",
+      "Squeeze whitespace.",
+    ],
+    slider: "Directly controls how bold the line-dropping is, with a light 40% floor so Claw stays recognizably aggressive.",
+    honestyNote: "Claw is deliberately barred from JSON: pruning whole lines from structured data is destructive, so it isn't even a planner candidate there — belt and braces on top of the segmenter guard.",
+    example: "A log where every second line is “health-check OK” loses the spam and keeps every warning and error.",
+  },
+  {
+    id: "ponytail", label: "Ponytail", icon: "🐴", group: "og-code", category: "code",
+    range: [0.5, 0.75], prov: "sim", inspired: "the open-source “ponytail” project",
+    typesShort: "code · mixed", quality: "gentle (0.90 base quality)",
+    what: "The lazy-senior-dev code reducer: strips everything around the logic — comments, banner blocks, blank-line padding — and keeps the code itself untouched.",
+    steps: [
+      "Strip comments — line and block comments go; string literals containing “//” or “/*” are protected by real quote-tracking, so URLs and glob patterns survive.",
+      "Drop ceremony — blank padding and decorative separator lines.",
+      "Squeeze whitespace (indentation is preserved — it's meaning in Python).",
+    ],
+    slider: "Controls how much ceremony beyond comments gets dropped.",
+    example: "A verbose Express route handler with a ten-line banner comment and doc-comments on every function loses a third of its tokens and still compiles.",
+  },
+  {
+    id: "llmlingua", label: "LLMLingua", icon: "✂️", group: "og-words", category: "semantic",
+    range: [0.25, 0.5], prov: "sim", inspired: "LLMLingua (Microsoft Research)",
+    typesShort: "prose · chat · markdown", quality: "gentle (0.90 base quality)",
+    what: "Word-level pruning: goes through prose and chat text word by word and drops the filler an AI model doesn't need — “very”, “just”, “basically”, “please note that”.",
+    steps: [
+      "Prune filler words at the slider's strength. Soft fillers go early; meaning-bearing connectives like “but”, “however” and “therefore” are protected until the very top of the range — dropping a “but” can invert a sentence.",
+      "Squeeze whitespace.",
+    ],
+    slider: "Directly sets how deep the pruning goes — from soft fillers only, to short-word stripping at maximum.",
+    honestyNote: "The real LLMLingua uses a language model to score every token's importance. miserly's version is a deterministic approximation of that idea — honest filler-list pruning, clearly badged as a simulation, never claiming the research authors' name as its own.",
+    example: "“User: I really think that this is basically the correct answer” → “User: I think this is the correct answer”.",
+  },
+  {
+    id: "longllmlingua", label: "LongLLMLingua", icon: "📜", group: "og-words", category: "semantic",
+    range: [0.18, 0.4], prov: "sim", inspired: "LongLLMLingua (Microsoft Research)",
+    typesShort: "RAG · knowledge · prose · chat", quality: "moderate (0.88 base quality)",
+    what: "The long-document sibling of LLMLingua: for big documents and retrieved passages, it prunes at two levels — whole low-information lines first, then filler words within what survives.",
+    steps: [
+      "Drop low-information lines (floor of 50% strength — this tool exists to be assertive on long content).",
+      "Prune filler words a notch harder than the slider setting.",
+      "Squeeze whitespace.",
+    ],
+    slider: "Sets the base strength; both steps scale from it.",
+    honestyNote: "The real LongLLMLingua also reorders content around your question. miserly's version doesn't condition on a question yet — the description says so in the app, in so many words.",
+    example: "A 50-page runbook pasted for one question drops boilerplate sections wholesale and thins the wording of the rest.",
+  },
+  {
+    id: "summarizer", label: "Summarizer", icon: "📝", group: "og-summary", category: "summarization",
+    range: [0.2, 0.45], prov: "native", inspired: null,
+    typesShort: "prose · markdown · chat · mixed", quality: "gentle (0.86 base quality)",
+    what: "The safe general-purpose default when nothing more specialized fits: an extractive summarizer. It doesn't rewrite anything — it selects which of your own sentences to keep.",
+    steps: [
+      "Score every sentence (lead sentences of paragraphs score highest — they carry the topic).",
+      "Keep the best sentences within the slider's budget. Every paragraph is guaranteed to keep at least its lead sentence, so no section ever silently vanishes.",
+      "Squeeze whitespace.",
+    ],
+    slider: "Directly sets the keep-budget: gentle keeps ~45% of sentences, fierce keeps ~20%.",
+    example: "A four-paragraph memo becomes four lead sentences plus the two most information-dense supporting ones.",
+  },
+  {
+    id: "500xcompressor", label: "500xCompressor", icon: "🧨", group: "og-summary", category: "summarization",
+    range: [0.04, 0.12], prov: "sim", inspired: "500xCompressor (research)",
+    typesShort: "prose · knowledge · markdown", quality: "the fidelity trade-off is real (0.70 base quality)",
+    what: "The extreme end of the scale: squeeze a document into a tiny, dense representation — keeping only 4–12% of it. Maximum savings, and the quality score honestly takes the hit.",
+    steps: [
+      "Extreme extractive summary — keep only the highest-value 4–12% of sentences (leads still guaranteed).",
+      "Hard filler pruning on what survives (minimum 60% strength).",
+      "Squeeze whitespace.",
+    ],
+    slider: "Moves the keep-ratio within its narrow extreme band.",
+    honestyNote: "The planner only reaches for this under a “Max compression” goal or a desperate budget — and the validation stage will loudly flag what it costs.",
+    example: "A 12,000-token background document becomes a ~900-token dense note for contexts where gist beats completeness.",
+  },
+  {
+    id: "recomp", label: "RECOMP", icon: "🎯", group: "og-rag", category: "retrieval",
+    range: [0.15, 0.35], prov: "sim", inspired: "RECOMP (research)",
+    typesShort: "RAG · knowledge · prose", quality: "moderate (0.85 base quality)",
+    what: "For retrieval-augmented AI apps: your search step fetched five reference passages, but the model only needs the evidence. RECOMP summarizes retrieved passages down to what answers the question.",
+    steps: [
+      "Extractive summary tuned tighter than the general Summarizer (keeps 15–35%).",
+      "Squeeze whitespace.",
+    ],
+    slider: "Sets the keep-budget within its range.",
+    example: "Five retrieved documentation pages become a page and a half of the passages that actually matter.",
+  },
+  {
+    id: "nuggets", label: "Nuggets", icon: "💎", group: "og-rag", category: "retrieval",
+    range: [0.12, 0.3], prov: "sim", inspired: "information-nugget extraction (community concept)",
+    typesShort: "knowledge · RAG · prose · chat", quality: "assertive (0.82 base quality)",
+    what: "Keeps the nuggets — the load-bearing facts, names, numbers and decisions — and discards the connective tissue around them.",
+    steps: [
+      "Extractive summary biased toward fact-dense sentences (keeps 12–30%).",
+      "Drop low-information lines at the slider's strength.",
+      "Squeeze whitespace.",
+    ],
+    slider: "Drives both the keep-budget and the line-dropping strength.",
+    example: "A meandering meeting transcript reduces to the decisions made, the numbers quoted, and who owns what.",
+  },
+  {
+    id: "xrag", label: "xRAG", icon: "🧪", group: "og-rag", category: "retrieval",
+    range: [0.04, 0.15], prov: "sim", inspired: "xRAG (research)",
+    typesShort: "RAG · knowledge only", quality: "the extreme option (0.72 base quality)",
+    what: "500xCompressor's sibling for retrieval: distill fetched passages into a very dense note. Meant for recall-tolerant pipelines where a hint is enough and tokens are precious.",
+    steps: [
+      "Extreme extractive summary of the passages (keeps 4–15%, leads guaranteed).",
+      "Hard filler pruning (minimum 60% strength).",
+      "Squeeze whitespace.",
+    ],
+    slider: "Moves the keep-ratio within its extreme band.",
+    example: "Twenty retrieved snippets become a compact evidence note — the model loses prose, keeps facts.",
+  },
+];
+
+function optimizerBody(o) {
+  const steps = o.steps.map(s => "<li>" + s + "</li>").join("");
+  const provLine = o.prov === "native"
+    ? "<strong>miserly's own algorithm</strong> — the recipe you see is the real, complete method, measured end to end."
+    : "<strong>research-inspired simulation</strong>" + (o.inspired ? " — an honest, deterministic approximation of the idea behind <em>" + o.inspired + "</em>. It wears a “sim” badge in the Pipeline Builder so nobody mistakes it for the original." : " — badged “sim” in the Pipeline Builder.");
+  return `
+    <p>${o.what}</p>
+    <p><strong>The recipe, in order:</strong></p>
+    <ul>${steps}</ul>
+    <ul>
+      <li><strong>Allowed to touch:</strong> ${o.typesShort}. Everything else in your document passes through byte-for-byte untouched — enforced by the safety contract, not by good intentions.</li>
+      <li><strong>Typical squeeze:</strong> ${cutRange(o.range)} of what it's allowed to touch.</li>
+      <li><strong>The aggressiveness slider:</strong> ${o.slider}</li>
+      <li><strong>Gentleness:</strong> ${o.quality}.</li>
+    </ul>
+    ${o.honestyNote ? '<div class="example"><div class="exlabel">Worth knowing</div>' + o.honestyNote + "</div>" : ""}
+    <div class="example"><div class="exlabel">For example</div>${o.example}</div>
+    <p>Provenance: ${provLine}</p>
+  `;
+}
+
+const OPTIMIZERS = OPTIMIZER_DATA.map(o => ({
+  id: "opt-" + o.id, kind: "card", tab: "optimizers", group: o.group,
+  icon: o.icon, title: o.label, provider: o.category,
+  chips: [
+    o.prov === "native" ? ["on", "native algorithm"] : ["dl", "research-inspired sim"],
+    ["price", cutRange(o.range)],
+    ["off", o.typesShort],
+  ],
+  crumb: "Optimizer · " + o.category + (o.inspired ? " · inspired by " + o.inspired : " · miserly original"),
+  body: optimizerBody(o),
+  hood: "",
+}));
+
+OPTIMIZERS.push(
+  {
+    id: "opt-toolbox", kind: "card", tab: "optimizers", group: "og-shared",
+    icon: "🧰", title: "The transform toolbox", provider: "shared",
+    chips: [["on", "one implementation each"], ["on", "every removal annotated"]],
+    crumb: "Shared machinery · src/engine/transforms",
+    body: `
+      <p>Look back at the recipes above and you'll notice the same steps recurring — compact JSON,
+      fold repeats, drop low-info lines, prune filler, summarize, squeeze whitespace. That's the
+      design: there is exactly <strong>one implementation</strong> of each text operation, in one
+      shared toolbox, and every optimizer is a short recipe composed from it.</p>
+      <p>Why that matters to you:</p>
+      <ul>
+        <li><strong>A fix lands everywhere.</strong> When the JSON-compactor learned to refuse
+        numbers too precise to round-trip, every optimizer that compacts JSON got safer at once.</li>
+        <li><strong>Nothing is silent.</strong> The toolbox operations annotate what they did —
+        “⟲ ×N” fold markers, “… 12 frames omitted …” notes — and report measured
+        character deltas that roll up into the stage breakdown you see.</li>
+        <li><strong>It's tested.</strong> The toolbox carries the project's regression suite:
+        every historical corruption bug (deleted braces, truncated strings, mangled Python,
+        corrupted IDs) is pinned by a test so it can't come back.</li>
+      </ul>
+    `,
+    hood: ``
+  },
+  {
+    id: "opt-safety", kind: "card", tab: "optimizers", group: "og-shared",
+    icon: "🛡️", title: "The safety contract", provider: "shared",
+    chips: [["on", "protected by default"], ["on", "guards every optimizer"]],
+    crumb: "Shared machinery · src/engine/segmenter",
+    body: `
+      <p>The system that makes it safe to run aggressive text surgery on mixed documents. Before
+      any risky operation runs, the document is split into <strong>typed segments</strong> —
+      this region is JSON, this is code, this is prose — and every toolbox operation declares
+      which types it may touch. The applicator physically withholds everything else.</p>
+      <ul>
+        <li><strong>Protected by default:</strong> a line the classifier can't confidently identify
+        (a bare number in an array, a keyword-less line of Python, a CSV row) inherits the type of
+        its structured neighbors instead of being treated as free-game prose.</li>
+        <li><strong>One classifier, everywhere:</strong> the planner, the budget charts and the
+        safety guard all share the same line-typing logic — no competing opinions about what your
+        text is.</li>
+        <li><strong>Guaranteed pass-through:</strong> segments an operation isn't allowed to touch
+        are reassembled byte-for-byte identical.</li>
+      </ul>
+      <div class="example"><div class="exlabel">Why it exists</div>
+      Early versions guessed content types inside each operation, with each using its own rules —
+      and prose tools occasionally ate JSON braces or Python keywords. Centralizing the judgment
+      into one guarded contract is what killed that entire class of bug.</div>
+    `,
+    hood: ``
+  },
+);
+
+NODES.push(...OPTIMIZERS);
+
+/* ===================== rendering ===================== */
+const flowEl = document.getElementById("flow");
+const igridEl = document.getElementById("igrid");
+const ogridEl = document.getElementById("ogrid");
+const tabViews = { flow: flowEl, optimizers: ogridEl, integrations: igridEl };
+const tabBtns = {
+  flow: document.getElementById("tabbtn-flow"),
+  optimizers: document.getElementById("tabbtn-optimizers"),
+  integrations: document.getElementById("tabbtn-integrations"),
+};
+let currentTab = "flow";
+const panelEl = document.getElementById("panel");
+const panelContent = document.getElementById("panelContent");
+const btnPrev = document.getElementById("btnPrev");
+const btnNext = document.getElementById("btnNext");
+const panelClose = document.getElementById("panelClose");
+
+const spines = NODES.filter(n => n.kind === "spine");
+const byId = Object.fromEntries(NODES.map(n => [n.id, n]));
+
+function render() {
+  const frag = document.createDocumentFragment();
+  spines.forEach((node, i) => {
+    const stage = document.createElement("div");
+    stage.className = "stage";
+
+    const btn = document.createElement("button");
+    btn.className = "node";
+    btn.id = "node-" + node.id;
+    btn.setAttribute("aria-label", node.step + ": " + node.title);
+    btn.innerHTML =
+      '<div class="ico">' + node.icon + '</div>' +
+      '<div class="txt"><div class="step">' + node.step + '</div>' +
+      '<h3>' + node.title + '</h3><p>' + node.blurb + '</p></div>';
+    btn.addEventListener("click", () => select(node.id));
+    stage.appendChild(btn);
+
+    const branches = NODES.filter(n => n.kind === "branch" && n.parent === node.id);
+    if (branches.length) {
+      const row = document.createElement("div");
+      row.className = "branches";
+      branches.forEach(b => {
+        const pill = document.createElement("button");
+        pill.className = "pill";
+        pill.id = "node-" + b.id;
+        pill.innerHTML = '<span class="pico">' + b.icon + '</span>' + b.title;
+        pill.addEventListener("click", () => select(b.id));
+        row.appendChild(pill);
+      });
+      stage.appendChild(row);
+    }
+
+    frag.appendChild(stage);
+    if (i < spines.length - 1) {
+      const conn = document.createElement("div");
+      conn.className = "connector";
+      frag.appendChild(conn);
+    }
+  });
+
+  const fin = document.createElement("div");
+  fin.className = "finish";
+  fin.innerHTML = "🪙 Smaller text · same meaning · <b>less money spent</b> — that's miserly.";
+  frag.appendChild(fin);
+  flowEl.appendChild(frag);
+}
+
+function renderCards(groups, container) {
+  const frag = document.createDocumentFragment();
+  for (const g of groups) {
+    const nodes = NODES.filter(n => n.kind === "card" && n.group === g.id);
+    if (!nodes.length) continue;
+    const sec = document.createElement("section");
+    sec.className = "igroup";
+    const h = document.createElement("h4");
+    h.textContent = g.title;
+    sec.appendChild(h);
+    if (g.note) {
+      const p = document.createElement("p");
+      p.className = "gnote";
+      p.textContent = g.note;
+      sec.appendChild(p);
+    }
+    const grid = document.createElement("div");
+    grid.className = "cards";
+    for (const n of nodes) {
+      const card = document.createElement("button");
+      card.className = "icard";
+      card.id = "node-" + n.id;
+      card.setAttribute("aria-label", n.title);
+      const chips = (n.chips || [])
+        .map(([tone, label]) => '<span class="schip ' + tone + '">' + label + "</span>")
+        .join("");
+      card.innerHTML =
+        '<div class="row1"><span class="cico">' + n.icon + "</span><h3>" + n.title + "</h3>" +
+        (n.provider ? '<span class="prov">' + n.provider + "</span>" : "") +
+        '</div><div class="status">' + chips + "</div>";
+      card.addEventListener("click", () => select(n.id));
+      grid.appendChild(card);
+    }
+    sec.appendChild(grid);
+    frag.appendChild(sec);
+  }
+  container.appendChild(frag);
+}
+
+function setTab(tab) {
+  if (tab === currentTab) return;
+  currentTab = tab;
+  for (const [name, view] of Object.entries(tabViews)) view.hidden = name !== tab;
+  for (const [name, btn] of Object.entries(tabBtns)) {
+    btn.classList.toggle("active", name === tab);
+    btn.setAttribute("aria-selected", String(name === tab));
+  }
+}
+
+function tabOf(node) { return node.tab || "flow"; }
+
+function crumbFor(node) {
+  if (node.kind === "card") return node.crumb || "Integration";
+  if (node.kind === "branch") {
+    const p = byId[node.parent];
+    return '↳ side note · attached to “' + p.title + '”';
+  }
+  return node.step;
+}
+
+function select(id, scrollPanel = true) {
+  const node = byId[id];
+  if (!node) return;
+
+  setTab(tabOf(node));
+  document.querySelectorAll(".node.active, .pill.active, .icard.active").forEach(el => el.classList.remove("active"));
+  const el = document.getElementById("node-" + id);
+  if (el) el.classList.add("active");
+
+  panelContent.innerHTML =
+    '<div class="crumb">' + crumbFor(node) + '</div>' +
+    '<h2><span class="big">' + node.icon + '</span>' + node.title + '</h2>' +
+    '<div class="body">' + node.body + '</div>' +
+    (node.hood && node.hood.trim()
+      ? '<details class="hood"><summary>Peek under the hood (technical)</summary><div class="hoodbody">' + node.hood + '</div></details>'
+      : '');
+
+  // Prev/Next walk within the current tab only.
+  const tabNodes = NODES.filter(n => tabOf(n) === tabOf(node));
+  const idx = tabNodes.indexOf(node);
+  const prev = tabNodes[idx - 1], next = tabNodes[idx + 1];
+  btnPrev.disabled = !prev;
+  btnNext.disabled = !next;
+  btnPrev.innerHTML = prev ? '← ' + prev.title + '<small>previous</small>' : '←<small>start</small>';
+  btnNext.innerHTML = next ? next.title + ' →<small>next</small>' : 'The end<small>you made it</small>';
+  btnPrev.onclick = () => prev && select(prev.id);
+  btnNext.onclick = () => next && select(next.id);
+
+  if (scrollPanel) panelEl.scrollTop = 0;
+  panelEl.classList.add("open");
+  if (history.replaceState) history.replaceState(null, "", "#" + id);
+}
+
+panelClose.addEventListener("click", () => panelEl.classList.remove("open"));
+
+tabBtns.flow.addEventListener("click", () => select("problem"));
+tabBtns.optimizers.addEventListener("click", () => select("opt-headroom"));
+tabBtns.integrations.addEventListener("click", () => select("svc-tokenizer"));
+
+render();
+renderCards(OPT_GROUPS, ogridEl);
+renderCards(GROUPS, igridEl);
+const initial = location.hash ? location.hash.slice(1) : "problem";
+select(byId[initial] ? initial : "problem", false);
+
+// Editing the URL hash by hand (or following an in-page anchor) selects too.
+window.addEventListener("hashchange", () => {
+  const id = location.hash.slice(1);
+  if (byId[id]) select(id);
+});
+</script>
+</body>
+</html>

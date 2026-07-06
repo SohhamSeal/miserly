@@ -1,4 +1,8 @@
-export { countBaseTokens, accurateTokenizerAvailable } from "./tokenizer";
+export {
+  countBaseTokens,
+  accurateTokenizerAvailable,
+  activeTokenizerKind,
+} from "./tokenizer";
 export {
   parseBinaryDocument,
   documentParsingAvailable,

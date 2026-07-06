@@ -36,8 +36,9 @@ export const MODELS: ModelPricing[] = [
     provider: "Anthropic",
     inputPerM: 15,
     outputPerM: 75,
-    // Anthropic cache reads ≈ 10% of base input (cache writes cost a premium).
+    // Anthropic cache reads ≈ 10% of base input; cache WRITES ≈ 1.25× input.
     cacheReadPerM: 1.5,
+    cacheWritePerM: 18.75,
     contextWindow: 200_000,
     tokenizer: "anthropic",
   },
@@ -48,6 +49,7 @@ export const MODELS: ModelPricing[] = [
     inputPerM: 3,
     outputPerM: 15,
     cacheReadPerM: 0.3,
+    cacheWritePerM: 3.75,
     contextWindow: 200_000,
     tokenizer: "anthropic",
   },
@@ -80,7 +82,8 @@ export const MODELS: ModelPricing[] = [
     provider: "Alibaba",
     inputPerM: 1.6,
     outputPerM: 6.4,
-    contextWindow: 131_072,
+    // qwen-max's window is ~32K — the 131K figure belongs to qwen-plus.
+    contextWindow: 32_768,
     tokenizer: "qwen",
   },
   {
@@ -172,6 +175,16 @@ export function cacheReadCost(baseTokens: number, model: ModelPricing): number {
   return (tokens / 1_000_000) * model.cacheReadPerM;
 }
 
+/**
+ * Cost (USD) of the first, cache-CREATING call for `baseTokens`. Providers
+ * without a write premium just pay the normal input price.
+ */
+export function cacheWriteCost(baseTokens: number, model: ModelPricing): number {
+  if (model.cacheWritePerM === undefined) return contextCost(baseTokens, model);
+  const tokens = adjustTokensForFamily(baseTokens, model.tokenizer);
+  return (tokens / 1_000_000) * model.cacheWritePerM;
+}
+
 export interface CacheAnalysis {
   supported: boolean;
   cacheReadPerM: number;
@@ -185,6 +198,9 @@ export interface CacheAnalysis {
   cacheReadOriginal: number;
   /** Cost of one cache-read reuse of the OPTIMIZED prompt. */
   cacheReadCompressed: number;
+  /** First-call cost that CREATES the cache entry (includes any write premium). */
+  cacheWriteOriginal: number;
+  cacheWriteCompressed: number;
   /**
    * Number of reuses beyond which just caching the ORIGINAL (never compressing)
    * already beats compressing on every call — `null` when compressing every
@@ -217,11 +233,16 @@ export function analyzeCache(
   const perCallCompressed = contextCost(optimizedBaseTokens, model);
   const cacheReadOriginal = cacheReadCost(originalBaseTokens, model);
   const cacheReadCompressed = cacheReadCost(optimizedBaseTokens, model);
+  const cacheWriteOriginal = cacheWriteCost(originalBaseTokens, model);
+  const cacheWriteCompressed = cacheWriteCost(optimizedBaseTokens, model);
 
-  // n·compressed  vs  original + (n-1)·cacheReadOriginal  →  solve for n.
+  // n·compressed  vs  writeOriginal + (n−1)·cacheReadOriginal  →  solve for n.
+  // The first cached call pays the provider's write premium (e.g. Anthropic
+  // ≈1.25× input), so break-even lands slightly later than a read-only model
+  // would suggest.
   let breakEvenReuse: number | null = null;
   if (perCallCompressed > cacheReadOriginal) {
-    const n = (perCallOriginal - cacheReadOriginal) / (perCallCompressed - cacheReadOriginal);
+    const n = (cacheWriteOriginal - cacheReadOriginal) / (perCallCompressed - cacheReadOriginal);
     breakEvenReuse = Math.max(2, Math.ceil(n));
   }
 
@@ -233,6 +254,8 @@ export function analyzeCache(
     perCallCompressed,
     cacheReadOriginal,
     cacheReadCompressed,
+    cacheWriteOriginal,
+    cacheWriteCompressed,
     breakEvenReuse,
   };
 }
