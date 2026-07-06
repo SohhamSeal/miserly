@@ -285,13 +285,20 @@ curl localhost:4141/miserly/stats                                 # session savi
 curl localhost:4141/miserly/config                                # current settings
 ```
 
-**Watch what's flowing through it.** Settings → Integrations in the studio
-shows a live **activity feed**: every chat request this session — which client
-(Claude Code, Cursor, …), which model, which blocks were compressed, and the
-token savings. By default the feed stores **metadata only, never your text**.
-An explicit "Capture request content" toggle keeps the full before/after text
+**Watch what's flowing through it.** Settings → Integrations opens the
+**activity monitor**: a history rail of every request this session (which
+client, which model, the savings), and the selected request displayed as
+**original | compressed side by side** with a per-block metadata bar. Blocks
+that ride along from earlier turns are labelled **“(history)”** — chat APIs
+re-send the whole conversation every message, which is exactly why inline
+compression compounds. A "Hide untouched" toggle collapses pass-through
+requests into thin timeline markers.
+
+By default the monitor stores **metadata only, never your text**. The
+**"Capture content"** switch (in the monitor's own header, or one click from
+any metadata-only entry) keeps the full before/after text of *future* requests
 too — in the proxy's memory only (max 200 requests, gone on restart, never
-written to disk) — with a visible "capturing content" badge while it's on.
+written to disk) — with a visible "capturing" badge while it's on.
 
 Every setting is live-editable the same way and persists to
 `~/.miserly/config.json`, so your preferences survive restarts.
