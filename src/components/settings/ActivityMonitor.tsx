@@ -25,6 +25,15 @@ function reductionPct(before: number, after: number): number {
   return before > 0 ? Math.round((1 - after / before) * 100) : 0;
 }
 
+const isHistoryBlock = (label: string) => label.includes("(history)");
+
+/** What a request actually compressed — drives the rail label so you can tell
+ * "my latest message was compressed" from "only carried-over history was". */
+function touchKind(e: ProxyHistoryEntry): "none" | "history" | "current" {
+  if (e.blocks.length === 0) return "none";
+  return e.blocks.some((b) => !isHistoryBlock(b.label)) ? "current" : "history";
+}
+
 type RailItem =
   | { kind: "entry"; e: ProxyHistoryEntry }
   | { kind: "gap"; count: number; key: string };
@@ -82,7 +91,7 @@ function HistoryRail({
         ) : (
           ((e) => {
         const active = e.id === selectedId;
-        const touched = e.blocks.length > 0;
+        const kind = touchKind(e);
         const pct = reductionPct(e.before, e.after);
         return (
           <button
@@ -104,8 +113,10 @@ function HistoryRail({
             </div>
             <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
               {e.model}
-              {touched ? (
+              {kind === "current" ? (
                 <span className="text-success"> · −{pct}%</span>
+              ) : kind === "history" ? (
+                <span> · history only · −{pct}%</span>
               ) : (
                 <span> · untouched</span>
               )}
@@ -160,9 +171,16 @@ function Detail({
 
   const block = entry.blocks[Math.min(blockIdx, entry.blocks.length - 1)];
   const hasText = block.beforeText !== undefined && block.afterText !== undefined;
+  const historyOnly = entry.blocks.every((b) => isHistoryBlock(b.label));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {historyOnly ? (
+        <div className="border-b border-border bg-secondary/40 px-3.5 py-2 text-[11px] text-muted-foreground">
+          Only carried-over conversation history was compressed here — your latest message was
+          under the size threshold, so it passed through untouched.
+        </div>
+      ) : null}
       {/* Block chips — pick which compressed block to inspect */}
       <div className="flex flex-wrap gap-1.5 border-b border-border px-3.5 py-2.5">
         {entry.blocks.map((b, i) => {
