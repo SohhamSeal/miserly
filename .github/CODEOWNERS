@@ -1,0 +1,4 @@
+# Every path requires review from the repo owner before merging.
+# Enforced only when branch protection has "Require review from Code Owners"
+# enabled — see CONTRIBUTING.md.
+* @SohhamSeal
