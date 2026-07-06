@@ -51,7 +51,19 @@ const failedStatus = (e: ProxyHistoryEntry) =>
 
 type RailItem =
   | { kind: "entry"; e: ProxyHistoryEntry }
-  | { kind: "gap"; count: number; key: string };
+  | { kind: "gap"; counts: Record<string, number>; key: string };
+
+/** "2 untouched · 1 bypassed" — a gap marker that says what it's hiding. */
+function gapLabel(counts: Record<string, number>): string {
+  const names: Record<string, string> = {
+    untouched: "untouched",
+    bypassed: "bypassed",
+    passthrough: "passed through",
+  };
+  return Object.entries(counts)
+    .map(([k, n]) => `${n} ${names[k] ?? k}`)
+    .join(" · ");
+}
 
 /** Left rail: one row per request, newest first. Untouched requests can be
  * collapsed into thin timeline markers so the timeline stays honest without
@@ -70,16 +82,19 @@ function HistoryRail({
 
   const items: RailItem[] = [];
   for (const e of entries) {
-    // Collapse ONLY genuinely-untouched rows. Bypassed, passthrough-endpoint,
-    // skipped-with-reason, and failed rows each carry information the user
-    // should still see, so they stay visible even with the filter on.
-    const collapsible = rowKind(e) === "untouched" && !failedStatus(e);
+    // Anything that compressed nothing collapses — the per-block reasons live
+    // in the detail pane, not the timeline. Failed requests stay visible.
+    const kind = rowKind(e);
+    const collapsible = e.blocks.length === 0 && !failedStatus(e);
     if (!hideUntouched || !collapsible) {
       items.push({ kind: "entry", e });
     } else {
+      // "skipped" reads as "untouched" in the marker; the distinction only
+      // matters once you're looking at the individual request.
+      const bucket = kind === "bypassed" || kind === "passthrough" ? kind : "untouched";
       const last = items[items.length - 1];
-      if (last?.kind === "gap") last.count++;
-      else items.push({ kind: "gap", count: 1, key: e.id });
+      if (last?.kind === "gap") last.counts[bucket] = (last.counts[bucket] ?? 0) + 1;
+      else items.push({ kind: "gap", counts: { [bucket]: 1 }, key: e.id });
     }
   }
 
@@ -103,9 +118,10 @@ function HistoryRail({
         item.kind === "gap" ? (
           <div
             key={item.key}
-            className="select-none px-3 py-1 text-center text-[10px] text-muted-foreground/60"
+            title="Requests that compressed nothing. Turn off “Hide untouched” to inspect them — each one records why it was left alone."
+            className="cursor-help select-none px-3 py-1 text-center text-[10px] text-muted-foreground/60"
           >
-            — {item.count} untouched —
+            — {gapLabel(item.counts)} —
           </div>
         ) : (
           ((e) => {
@@ -131,22 +147,25 @@ function HistoryRail({
                 {timeOf(e.ts)}
               </span>
             </div>
-            <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-              {e.model}
-              {kind === "current" ? (
-                <span className="text-success"> · −{pct}%</span>
-              ) : kind === "history" ? (
-                <span> · history only · −{pct}%</span>
-              ) : kind === "skipped" ? (
-                <span> · nothing shrunk</span>
-              ) : kind === "bypassed" ? (
-                <span className="text-warning"> · bypassed</span>
-              ) : kind === "passthrough" ? (
-                <span> · passed through</span>
-              ) : (
-                <span> · untouched</span>
-              )}
-              {failed ? <span className="text-destructive"> · {e.status}</span> : null}
+            {/* Model truncates; the outcome label on the right never does. */}
+            <div className="mt-0.5 flex items-baseline gap-1 text-[11px] text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate">{e.model}</span>
+              <span className="shrink-0">
+                {kind === "current" ? (
+                  <span className="text-success">−{pct}%</span>
+                ) : kind === "history" ? (
+                  <span>history only · −{pct}%</span>
+                ) : kind === "skipped" ? (
+                  <span>nothing shrunk</span>
+                ) : kind === "bypassed" ? (
+                  <span className="text-warning">bypassed</span>
+                ) : kind === "passthrough" ? (
+                  <span>passed through</span>
+                ) : (
+                  <span>untouched</span>
+                )}
+                {failed ? <span className="text-destructive"> · {e.status}</span> : null}
+              </span>
             </div>
           </button>
         );
