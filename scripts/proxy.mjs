@@ -252,13 +252,15 @@ function detectClient(headers, api) {
 
 async function compressText(text) {
   const tokens = countTokens(text);
-  if (tokens < CFG.minTokens) return null;
+  if (tokens < CFG.minTokens) return { ok: false, reason: "below-threshold", tokens };
   // Injected instruction blocks: Claude Code (and other agents) wrap skill
   // lists and context updates in <system-reminder> tags INSIDE user messages.
   // Those are instructions, not data — rewording instructions for a few
   // percent is a bad trade, so they get the same hands-off policy as system
   // prompts.
-  if (text.trimStart().startsWith("<system-reminder>")) return null;
+  if (text.trimStart().startsWith("<system-reminder>")) {
+    return { ok: false, reason: "instruction-block", tokens };
+  }
   // A demanding budget (half the block, unless the user pinned one) keeps the
   // planner from early-stopping after a single gentle stage on mid-size blocks.
   const targetBudget = CFG.budget ?? Math.ceil(tokens / 2);
@@ -271,21 +273,23 @@ async function compressText(text) {
   });
   // Only swap when the engine measurably helped (>3% — below that the churn
   // isn't worth changing the payload).
-  if (result.optimizedTokens >= tokens * 0.97) return null;
+  if (result.optimizedTokens >= tokens * 0.97) {
+    return { ok: false, reason: "no-gain", tokens };
+  }
   totals.blocks++;
   totals.before += tokens;
   totals.after += result.optimizedTokens;
   const out = CFG.marker
     ? `[miserly: compressed ~${tokens.toLocaleString()} → ~${result.optimizedTokens.toLocaleString()} tokens]\n${result.outputText}`
     : result.outputText;
-  return { out, tokens, optimized: result.optimizedTokens };
+  return { ok: true, out, tokens, optimized: result.optimizedTokens };
 }
 
-async function tryBlock(details, holder, key, label) {
+async function tryBlock(walk, holder, key, label) {
   const value = holder[key];
   if (typeof value !== "string") return;
   const r = await compressText(value);
-  if (r) {
+  if (r.ok) {
     holder[key] = r.out;
     const d = { label, before: r.tokens, after: r.optimized };
     if (CFG.captureContent) {
@@ -293,19 +297,23 @@ async function tryBlock(details, holder, key, label) {
       d.afterText = r.out.slice(0, MAX_CAPTURE_CHARS);
       d.truncated = value.length > MAX_CAPTURE_CHARS || r.out.length > MAX_CAPTURE_CHARS;
     }
-    details.push(d);
+    walk.details.push(d);
+  } else {
+    // Record WHY it was left alone — "why didn't my paste compress?" is the
+    // most-asked question the monitor has to answer.
+    walk.skipped.push({ label, reason: r.reason, tokens: r.tokens });
   }
 }
 
 /** Compress eligible text in an Anthropic /v1/messages body, in place. */
 async function compressAnthropicBody(body) {
-  const details = [];
+  const walk = { details: [], skipped: [] };
   if (CFG.compressSystem && body.system !== undefined) {
     if (typeof body.system === "string") {
-      await tryBlock(details, body, "system", "system");
+      await tryBlock(walk, body, "system", "system");
     } else if (Array.isArray(body.system)) {
       for (const blk of body.system) {
-        if (blk?.type === "text") await tryBlock(details, blk, "text", "system");
+        if (blk?.type === "text") await tryBlock(walk, blk, "text", "system");
       }
     }
   }
@@ -319,30 +327,30 @@ async function compressAnthropicBody(body) {
     // doesn't look like it's showing the wrong request.
     const hist = i < msgs.length - 1 ? " (history)" : "";
     if (typeof msg.content === "string") {
-      await tryBlock(details, msg, "content", "user text" + hist);
+      await tryBlock(walk, msg, "content", "user text" + hist);
       continue;
     }
     if (!Array.isArray(msg.content)) continue;
     for (const block of msg.content) {
       if (block?.type === "text") {
-        await tryBlock(details, block, "text", "user text" + hist);
+        await tryBlock(walk, block, "text", "user text" + hist);
       } else if (block?.type === "tool_result") {
         if (typeof block.content === "string") {
-          await tryBlock(details, block, "content", "tool_result" + hist);
+          await tryBlock(walk, block, "content", "tool_result" + hist);
         } else if (Array.isArray(block.content)) {
           for (const part of block.content) {
-            if (part?.type === "text") await tryBlock(details, part, "text", "tool_result" + hist);
+            if (part?.type === "text") await tryBlock(walk, part, "text", "tool_result" + hist);
           }
         }
       }
     }
   }
-  return details;
+  return walk;
 }
 
 /** Compress eligible text in an OpenAI /v1/chat/completions body, in place. */
 async function compressOpenAIBody(body) {
-  const details = [];
+  const walk = { details: [], skipped: [] };
   const msgs = body.messages ?? [];
   for (let i = 0; i < msgs.length; i++) {
     const msg = msgs[i];
@@ -354,15 +362,15 @@ async function compressOpenAIBody(body) {
     const label =
       (role === "tool" ? "tool message" : isSystem ? "system" : "user text") + hist;
     if (typeof msg.content === "string") {
-      await tryBlock(details, msg, "content", label);
+      await tryBlock(walk, msg, "content", label);
       continue;
     }
     if (!Array.isArray(msg.content)) continue;
     for (const part of msg.content) {
-      if (part?.type === "text") await tryBlock(details, part, "text", label);
+      if (part?.type === "text") await tryBlock(walk, part, "text", label);
     }
   }
-  return details;
+  return walk;
 }
 
 // --- plumbing ----------------------------------------------------------------
@@ -516,6 +524,8 @@ function warnCertOnce() {
 }
 
 const server = http.createServer(async (req, res) => {
+  // Declared out here so the catch block can stamp status on a recorded entry.
+  let entry = null;
   try {
     if (req.url?.startsWith("/miserly/")) {
       if (await handleControl(req, res)) return;
@@ -527,25 +537,52 @@ const server = http.createServer(async (req, res) => {
     // everything when disabled — passes through byte-for-byte.
     const isAnthropicChat = req.method === "POST" && req.url?.startsWith("/v1/messages");
     const isOpenAIChat = req.method === "POST" && req.url?.startsWith("/v1/chat/completions");
+    if (!CFG.enabled && (isAnthropicChat || isOpenAIChat) && bodyBuf.length > 0) {
+      // Bypassed — passed through byte-for-byte, but still worth a timeline
+      // row: "nothing is showing up" and "compression is off" look identical
+      // otherwise. Cheap model sniff from the buffer head; no full parse.
+      const head = bodyBuf.slice(0, 4096).toString("utf8");
+      const mm = head.match(/"model"\s*:\s*"([^"]+)"/);
+      const api = isAnthropicChat ? "anthropic" : "openai";
+      entry = {
+        id: crypto.randomUUID(),
+        ts: Date.now(),
+        api,
+        client: detectClient(req.headers, api),
+        model: mm?.[1] ?? "unknown",
+        bypassed: true,
+        blocks: [],
+        skipped: [],
+        minTokens: CFG.minTokens,
+        before: 0,
+        after: 0,
+      };
+      history.unshift(entry);
+      if (history.length > MAX_HISTORY) history.pop();
+    }
     if (CFG.enabled && (isAnthropicChat || isOpenAIChat) && bodyBuf.length > 0) {
       try {
         const body = JSON.parse(bodyBuf.toString("utf8"));
         const api = isAnthropicChat ? "anthropic" : "openai";
-        const details = isAnthropicChat
+        const walk = isAnthropicChat
           ? await compressAnthropicBody(body)
           : await compressOpenAIBody(body);
+        const details = walk.details;
         // Record EVERY parsed chat request — including "nothing over the
         // threshold" ones — so the activity feed shows the whole picture.
-        history.unshift({
+        entry = {
           id: crypto.randomUUID(),
           ts: Date.now(),
           api,
           client: detectClient(req.headers, api),
           model: typeof body.model === "string" ? body.model : "unknown",
           blocks: details,
+          skipped: walk.skipped,
+          minTokens: CFG.minTokens,
           before: details.reduce((a, d) => a + d.before, 0),
           after: details.reduce((a, d) => a + d.after, 0),
-        });
+        };
+        history.unshift(entry);
         if (history.length > MAX_HISTORY) history.pop();
         if (details.length > 0) {
           totals.requests++;
@@ -591,6 +628,7 @@ const server = http.createServer(async (req, res) => {
       res.off("close", onClientGone);
     }
 
+    if (entry) entry.status = upstreamRes.status;
     res.statusCode = upstreamRes.status;
     upstreamRes.headers.forEach((value, key) => {
       if (!["content-encoding", "content-length", "transfer-encoding", "connection"].includes(key)) {
@@ -627,9 +665,11 @@ const server = http.createServer(async (req, res) => {
     }
     if (err?.name === "AbortError") {
       // Client went away first — nothing to answer, nothing to log loudly.
+      if (entry) entry.status = "cancelled";
       res.destroy();
       return;
     }
+    if (entry) entry.status = "failed";
     const netCause = err?.cause?.code ?? err?.cause?.errors?.[0]?.code ?? err?.code;
     if (netCause) {
       // Network-level failure on the way to the provider (reset, stall, DNS…).
