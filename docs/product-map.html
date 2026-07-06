@@ -1059,11 +1059,12 @@ const INTEGRATIONS = [
         <li><strong>Every knob, live</strong> — goal, per-block budget, minimum block size,
         system-prompt compression (with the cache-cost warning), and the compression marker.</li>
         <li><strong>Wire-up helpers</strong> — copy-paste commands for each client.</li>
-        <li><strong>Live activity feed</strong> — every request this session: which client
-        (Claude Code, Cursor…), which model, which blocks shrank, and the savings. Metadata
-        only by default; an explicit “capture request content” toggle (with a visible
-        badge) keeps full before/after text in memory so you can inspect exactly what was
-        compressed — never written to disk, gone on restart.</li>
+        <li><strong>Activity monitor</strong> — a full-screen master-detail view of every
+        request this session: a history rail on the left, and the selected request opened as
+        <em>original alongside compressed</em> with a per-block metadata bar. Metadata only by
+        default; an explicit “capture request content” toggle (with a visible badge) keeps full
+        before/after text in memory so you can read exactly what was compressed — never written
+        to disk, gone on restart.</li>
       </ul>
       <p>When the proxy isn't running, the panel doesn't break — it shows the start command and
       reconnects by itself the moment the proxy comes up.</p>

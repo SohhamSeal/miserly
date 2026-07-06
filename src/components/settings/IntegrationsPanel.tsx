@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, Check, Copy, Loader2 } from "lucide-react";
+import { Activity, AlertTriangle, Check, Copy, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCompact } from "@/lib/format";
 import { GOAL_LABELS, type OptimizationGoal } from "@/engine";
@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ActivityMonitor } from "./ActivityMonitor";
 
 const GOALS: OptimizationGoal[] = [
   "balanced",
@@ -136,91 +137,75 @@ function OfflineView({ port }: { port: number }) {
   );
 }
 
-function timeOf(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-function ActivityFeed({
+function ActivitySummary({
   entries,
   capture,
-  onClear,
+  onOpen,
 }: {
   entries: ProxyHistoryEntry[];
   capture: boolean;
-  onClear: () => void;
+  onOpen: () => void;
 }) {
+  const recent = entries.slice(0, 3);
   return (
     <div className="mt-5">
       <div className="mb-1 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold">Recent activity</h3>
-        {entries.length > 0 ? (
-          <Button variant="ghost" size="sm" onClick={onClear}>
-            Clear
-          </Button>
-        ) : null}
+        <Button variant="outline" size="sm" onClick={onOpen}>
+          <Activity className="h-3.5 w-3.5" />
+          Open activity monitor
+        </Button>
       </div>
       <p className="mb-2 text-xs text-muted-foreground">
-        Every chat request that passed through the proxy this session (memory-only, newest
-        first{capture ? ", full content captured" : ", metadata only"}).
+        Requests that passed through the proxy this session (memory-only,{" "}
+        {capture ? "full content captured" : "metadata only"}).
       </p>
       {entries.length === 0 ? (
         <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
           No traffic yet — wire a client below and work normally; requests appear here.
         </div>
       ) : (
-        <div className="flex max-h-72 flex-col gap-1.5 overflow-y-auto pr-1">
-          {entries.map((e) => {
+        <div className="flex flex-col gap-1 rounded-md border border-border bg-card/60 p-1.5">
+          {recent.map((e) => {
             const pct = e.before > 0 ? Math.round((1 - e.after / e.before) * 100) : 0;
             return (
-              <details
+              <button
                 key={e.id}
-                className="rounded-md border border-border bg-card/60 px-3 py-2 text-xs"
+                type="button"
+                onClick={onOpen}
+                className="flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-accent/40"
               >
-                <summary className="flex cursor-pointer list-none items-center gap-2">
-                  <span className="tabular-nums text-muted-foreground">{timeOf(e.ts)}</span>
-                  <span className="font-medium">{e.client}</span>
-                  <span className="truncate text-muted-foreground">{e.model}</span>
-                  <span className="ml-auto shrink-0 text-muted-foreground">
-                    {e.blocks.length === 0
-                      ? "nothing over threshold"
-                      : `${e.blocks.length} block(s) · ~${formatCompact(e.before)} → ~${formatCompact(
-                          e.after,
-                        )} (−${pct}%)`}
-                  </span>
-                </summary>
-                {e.blocks.length > 0 ? (
-                  <div className="mt-2 flex flex-col gap-2 border-t border-border/60 pt-2">
-                    {e.blocks.map((b, i) => (
-                      <div key={i}>
-                        <div className="text-muted-foreground">
-                          {b.label}: ~{formatCompact(b.before)} → ~{formatCompact(b.after)} tokens
-                          {b.truncated ? " · preview truncated" : ""}
-                        </div>
-                        {b.beforeText !== undefined ? (
-                          <div className="mt-1 grid gap-2 sm:grid-cols-2">
-                            <pre className="max-h-36 overflow-auto rounded border border-border bg-background p-2 text-[10.5px] leading-relaxed">
-                              {b.beforeText}
-                            </pre>
-                            <pre className="max-h-36 overflow-auto rounded border border-border bg-background p-2 text-[10.5px] leading-relaxed">
-                              {b.afterText}
-                            </pre>
-                          </div>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </details>
+                <span className="tabular-nums text-muted-foreground">{timeOf(e.ts)}</span>
+                <span className="font-medium">{e.client}</span>
+                <span className="ml-auto shrink-0 text-muted-foreground">
+                  {e.blocks.length === 0
+                    ? "untouched"
+                    : `~${formatCompact(e.before)} → ~${formatCompact(e.after)} (−${pct}%)`}
+                </span>
+              </button>
             );
           })}
+          {entries.length > recent.length ? (
+            <button
+              type="button"
+              onClick={onOpen}
+              className="rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-accent/40"
+            >
+              + {entries.length - recent.length} more — open the monitor →
+            </button>
+          ) : null}
         </div>
       )}
     </div>
   );
+}
+
+function timeOf(ts: number): string {
+  return new Date(ts).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 function OnlineView({
@@ -230,6 +215,7 @@ function OnlineView({
   entries,
   onPatch,
   onClearHistory,
+  onOpenMonitor,
   patchError,
 }: {
   port: number;
@@ -238,6 +224,7 @@ function OnlineView({
   entries: ProxyHistoryEntry[];
   onPatch: (patch: Parameters<typeof patchProxyConfig>[1]) => void;
   onClearHistory: () => void;
+  onOpenMonitor: () => void;
   patchError: string | null;
 }) {
   const pct = stats && stats.before > 0 ? Math.round((1 - stats.after / stats.before) * 100) : 0;
@@ -395,7 +382,7 @@ function OnlineView({
         }
       />
 
-      <ActivityFeed entries={entries} capture={config.captureContent} onClear={onClearHistory} />
+      <ActivitySummary entries={entries} capture={config.captureContent} onOpen={onOpenMonitor} />
 
       {/* Wiring */}
       <div className="mt-5">
@@ -441,6 +428,7 @@ export function IntegrationsPanel() {
   const [stats, setStats] = useState<ProxyStats | null>(null);
   const [entries, setEntries] = useState<ProxyHistoryEntry[]>([]);
   const [patchError, setPatchError] = useState<string | null>(null);
+  const [monitorOpen, setMonitorOpen] = useState(false);
   const alive = useRef(true);
 
   const refresh = useCallback(async () => {
@@ -523,11 +511,20 @@ export function IntegrationsPanel() {
           entries={entries}
           onPatch={onPatch}
           onClearHistory={onClearHistory}
+          onOpenMonitor={() => setMonitorOpen(true)}
           patchError={patchError}
         />
       ) : (
         <OfflineView port={port} />
       )}
+      <ActivityMonitor
+        open={monitorOpen}
+        onOpenChange={setMonitorOpen}
+        entries={entries}
+        capture={config?.captureContent ?? false}
+        sessionSaved={stats?.saved ?? 0}
+        onClear={onClearHistory}
+      />
     </div>
   );
 }
