@@ -3,7 +3,9 @@ import { ArrowLeft, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCompact } from "@/lib/format";
 import type { ProxyHistoryEntry } from "@/lib/proxyClient";
+import { useSettingsStore } from "@/store/useSettingsStore";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +25,13 @@ function reductionPct(before: number, after: number): number {
   return before > 0 ? Math.round((1 - after / before) * 100) : 0;
 }
 
-/** Left rail: one row per request, newest first. */
+type RailItem =
+  | { kind: "entry"; e: ProxyHistoryEntry }
+  | { kind: "gap"; count: number; key: string };
+
+/** Left rail: one row per request, newest first. Untouched requests can be
+ * collapsed into thin timeline markers so the timeline stays honest without
+ * eating space. */
 function HistoryRail({
   entries,
   selectedId,
@@ -33,12 +41,46 @@ function HistoryRail({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const hideUntouched = useSettingsStore((st) => st.monitorHideUntouched);
+  const setHideUntouched = useSettingsStore((st) => st.setMonitorHideUntouched);
+
+  const items: RailItem[] = [];
+  for (const e of entries) {
+    if (!hideUntouched || e.blocks.length > 0) {
+      items.push({ kind: "entry", e });
+    } else {
+      const last = items[items.length - 1];
+      if (last?.kind === "gap") last.count++;
+      else items.push({ kind: "gap", count: 1, key: e.id });
+    }
+  }
+
   return (
     <div className="flex flex-col overflow-y-auto">
-      <div className="px-3 pb-1.5 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        History
+      <div className="flex items-center justify-between gap-2 px-3 pb-1.5 pt-3">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          History
+        </span>
+        <label className="flex cursor-pointer items-center gap-1.5 text-[10.5px] text-muted-foreground">
+          <Switch
+            checked={hideUntouched}
+            onCheckedChange={setHideUntouched}
+            aria-label="Hide untouched requests"
+            className="scale-[0.7]"
+          />
+          Hide untouched
+        </label>
       </div>
-      {entries.map((e) => {
+      {items.map((item) =>
+        item.kind === "gap" ? (
+          <div
+            key={item.key}
+            className="select-none px-3 py-1 text-center text-[10px] text-muted-foreground/60"
+          >
+            — {item.count} untouched —
+          </div>
+        ) : (
+          ((e) => {
         const active = e.id === selectedId;
         const touched = e.blocks.length > 0;
         const pct = reductionPct(e.before, e.after);
@@ -70,7 +112,9 @@ function HistoryRail({
             </div>
           </button>
         );
-      })}
+          })(item.e)
+        ),
+      )}
     </div>
   );
 }
@@ -79,9 +123,11 @@ function HistoryRail({
 function Detail({
   entry,
   capture,
+  onToggleCapture,
 }: {
   entry: ProxyHistoryEntry | null;
   capture: boolean;
+  onToggleCapture: (value: boolean) => void;
 }) {
   const [blockIdx, setBlockIdx] = useState(0);
   // Reset the block selection whenever the chosen request changes.
@@ -177,10 +223,22 @@ function Detail({
               />
             </div>
           </div>
-          <p className="max-w-sm text-xs text-muted-foreground">
-            Turn on <strong>Capture request content</strong> in the Integrations panel to see the
-            actual text here. It stays in the proxy's memory only.
-          </p>
+          {capture ? (
+            <p className="max-w-sm text-xs text-muted-foreground">
+              Capture is on — but this request was recorded before it was enabled. Send a new
+              message from your agent; new requests will show their full text here.
+            </p>
+          ) : (
+            <>
+              <Button size="sm" onClick={() => onToggleCapture(true)}>
+                Turn on capture
+              </Button>
+              <p className="max-w-sm text-xs text-muted-foreground">
+                Captures the full before/after text of <strong>future</strong> requests — kept in
+                the proxy's memory only, never written to disk, gone on restart.
+              </p>
+            </>
+          )}
         </div>
       )}
 
@@ -216,6 +274,7 @@ export function ActivityMonitor({
   capture,
   sessionSaved,
   onClear,
+  onToggleCapture,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -223,6 +282,7 @@ export function ActivityMonitor({
   capture: boolean;
   sessionSaved: number;
   onClear: () => void;
+  onToggleCapture: (value: boolean) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Mobile: once a request is tapped, show the detail over the list.
@@ -261,20 +321,26 @@ export function ActivityMonitor({
           </span>
           {capture ? (
             <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
-              ● capturing content
+              ● capturing
             </span>
           ) : null}
+          <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+            <Switch
+              checked={capture}
+              onCheckedChange={onToggleCapture}
+              aria-label="Capture request content"
+              className="scale-75"
+            />
+            Capture content
+          </label>
           {entries.length > 0 ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="ml-auto mr-8"
-              onClick={onClear}
-            >
+            <Button variant="ghost" size="sm" className="mr-8" onClick={onClear}>
               <Trash2 className="h-3.5 w-3.5" />
               Clear
             </Button>
-          ) : null}
+          ) : (
+            <span className="mr-8" />
+          )}
         </div>
 
         {entries.length === 0 ? (
@@ -296,7 +362,7 @@ export function ActivityMonitor({
                   onSelect={setSelectedId}
                 />
               </div>
-              <Detail entry={selected} capture={capture} />
+              <Detail entry={selected} capture={capture} onToggleCapture={onToggleCapture} />
             </div>
 
             {/* Mobile: list, then detail slides over */}
@@ -311,7 +377,7 @@ export function ActivityMonitor({
                     <ArrowLeft className="h-3.5 w-3.5" />
                     All requests
                   </button>
-                  <Detail entry={selected} capture={capture} />
+                  <Detail entry={selected} capture={capture} onToggleCapture={onToggleCapture} />
                 </>
               ) : (
                 <HistoryRail

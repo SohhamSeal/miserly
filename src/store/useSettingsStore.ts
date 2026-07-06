@@ -42,6 +42,8 @@ interface SettingsState {
 
   /** Port of the local miserly proxy the Integrations panel talks to. */
   proxyPort: number;
+  /** Activity monitor: collapse untouched requests into thin timeline markers. */
+  monitorHideUntouched: boolean;
 
   setTheme: (theme: ThemeMode) => void;
   setReduceMotion: (value: boolean) => void;
@@ -53,6 +55,7 @@ interface SettingsState {
   setFeatureEnabled: (key: FeatureKey, enabled: boolean) => void;
   resetFeatureOverrides: () => void;
   setProxyPort: (port: number) => void;
+  setMonitorHideUntouched: (value: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -67,6 +70,7 @@ export const useSettingsStore = create<SettingsState>()(
       historyOpen: false,
       featureOverrides: {},
       proxyPort: 4141,
+      monitorHideUntouched: true,
 
       setTheme: (theme) => set({ theme }),
       setReduceMotion: (value) => set({ reduceMotion: value }),
@@ -84,6 +88,7 @@ export const useSettingsStore = create<SettingsState>()(
       },
       resetFeatureOverrides: () => set({ featureOverrides: {} }),
       setProxyPort: (port) => set({ proxyPort: port }),
+      setMonitorHideUntouched: (value) => set({ monitorHideUntouched: value }),
     }),
     {
       name: "miserly-settings",
@@ -99,6 +104,7 @@ export const useSettingsStore = create<SettingsState>()(
         showGuide: state.showGuide,
         featureOverrides: state.featureOverrides,
         proxyPort: state.proxyPort,
+        monitorHideUntouched: state.monitorHideUntouched,
       }),
       // Force the sidebar collapsed on every load, even if an older build had
       // persisted `historyOpen: true` into localStorage.
