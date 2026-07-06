@@ -523,6 +523,7 @@ export function IntegrationsPanel() {
         entries={entries}
         capture={config?.captureContent ?? false}
         sessionSaved={stats?.saved ?? 0}
+        online={online}
         onClear={onClearHistory}
         onToggleCapture={(v) => onPatch({ captureContent: v })}
       />

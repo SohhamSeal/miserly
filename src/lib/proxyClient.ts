@@ -89,6 +89,12 @@ export interface ProxyHistoryBlock {
   truncated?: boolean;
 }
 
+export interface ProxySkippedBlock {
+  label: string;
+  reason: "below-threshold" | "instruction-block" | "no-gain";
+  tokens: number;
+}
+
 export interface ProxyHistoryEntry {
   id: string;
   ts: number;
@@ -96,6 +102,16 @@ export interface ProxyHistoryEntry {
   client: string;
   model: string;
   blocks: ProxyHistoryBlock[];
+  /** Blocks the proxy left alone, with the reason why. */
+  skipped?: ProxySkippedBlock[];
+  /** The minimum-block-size threshold in effect when this ran. */
+  minTokens?: number;
+  /** True when compression was off (bypass) — passed through untouched. */
+  bypassed?: true;
+  /** Set for recorded-but-not-compressed generation endpoints (e.g. /v1/responses). */
+  endpoint?: string;
+  /** Outcome: upstream HTTP status, or "failed" / "cancelled". */
+  status?: number | "failed" | "cancelled";
   before: number;
   after: number;
 }

@@ -535,8 +535,36 @@ const server = http.createServer(async (req, res) => {
 
     // Rewrite eligible chat requests (unless bypassed); everything else — and
     // everything when disabled — passes through byte-for-byte.
-    const isAnthropicChat = req.method === "POST" && req.url?.startsWith("/v1/messages");
-    const isOpenAIChat = req.method === "POST" && req.url?.startsWith("/v1/chat/completions");
+    const path = (req.url ?? "").split("?")[0];
+    // count_tokens probes look like /v1/messages/... but MUST pass untouched:
+    // compressing them would change the token counts the client budgets with.
+    const isAnthropicChat = req.method === "POST" && path === "/v1/messages";
+    const isOpenAIChat = req.method === "POST" && path === "/v1/chat/completions";
+    // Generation endpoints we don't compress (yet) — recorded as passthrough so
+    // a wired Codex (Responses API) session doesn't look like dead air.
+    const isOtherGen =
+      req.method === "POST" &&
+      ["/v1/responses", "/v1/completions", "/v1/complete"].includes(path);
+    if (isOtherGen && bodyBuf.length > 0) {
+      const head = bodyBuf.slice(0, 4096).toString("utf8");
+      const mm = head.match(/"model"\s*:\s*"([^"]+)"/);
+      const api = path === "/v1/complete" ? "anthropic" : "openai";
+      entry = {
+        id: crypto.randomUUID(),
+        ts: Date.now(),
+        api,
+        client: detectClient(req.headers, api),
+        model: mm?.[1] ?? "unknown",
+        endpoint: path,
+        blocks: [],
+        skipped: [],
+        minTokens: CFG.minTokens,
+        before: 0,
+        after: 0,
+      };
+      history.unshift(entry);
+      if (history.length > MAX_HISTORY) history.pop();
+    }
     if (!CFG.enabled && (isAnthropicChat || isOpenAIChat) && bodyBuf.length > 0) {
       // Bypassed — passed through byte-for-byte, but still worth a timeline
       // row: "nothing is showing up" and "compression is off" look identical

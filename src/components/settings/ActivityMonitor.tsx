@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCompact } from "@/lib/format";
-import type { ProxyHistoryEntry } from "@/lib/proxyClient";
+import type { ProxyHistoryEntry, ProxySkippedBlock } from "@/lib/proxyClient";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -27,12 +27,27 @@ function reductionPct(before: number, after: number): number {
 
 const isHistoryBlock = (label: string) => label.includes("(history)");
 
-/** What a request actually compressed — drives the rail label so you can tell
- * "my latest message was compressed" from "only carried-over history was". */
-function touchKind(e: ProxyHistoryEntry): "none" | "history" | "current" {
-  if (e.blocks.length === 0) return "none";
-  return e.blocks.some((b) => !isHistoryBlock(b.label)) ? "current" : "history";
+const SKIP_REASON: Record<ProxySkippedBlock["reason"], string> = {
+  "below-threshold": "below the size minimum",
+  "instruction-block": "agent instruction block — never compressed",
+  "no-gain": "engine couldn't save 3%, original kept",
+};
+
+type RowKind = "current" | "history" | "skipped" | "bypassed" | "passthrough" | "untouched";
+
+/** What a request did — drives the rail label so each row explains itself. */
+function rowKind(e: ProxyHistoryEntry): RowKind {
+  if (e.bypassed) return "bypassed";
+  if (e.endpoint) return "passthrough";
+  if (e.blocks.length > 0) {
+    return e.blocks.some((b) => !isHistoryBlock(b.label)) ? "current" : "history";
+  }
+  if (e.skipped && e.skipped.length > 0) return "skipped";
+  return "untouched";
 }
+
+const failedStatus = (e: ProxyHistoryEntry) =>
+  e.status === "failed" || e.status === "cancelled" || (typeof e.status === "number" && e.status >= 400);
 
 type RailItem =
   | { kind: "entry"; e: ProxyHistoryEntry }
@@ -55,7 +70,11 @@ function HistoryRail({
 
   const items: RailItem[] = [];
   for (const e of entries) {
-    if (!hideUntouched || e.blocks.length > 0) {
+    // Collapse ONLY genuinely-untouched rows. Bypassed, passthrough-endpoint,
+    // skipped-with-reason, and failed rows each carry information the user
+    // should still see, so they stay visible even with the filter on.
+    const collapsible = rowKind(e) === "untouched" && !failedStatus(e);
+    if (!hideUntouched || !collapsible) {
       items.push({ kind: "entry", e });
     } else {
       const last = items[items.length - 1];
@@ -91,8 +110,9 @@ function HistoryRail({
         ) : (
           ((e) => {
         const active = e.id === selectedId;
-        const kind = touchKind(e);
+        const kind = rowKind(e);
         const pct = reductionPct(e.before, e.after);
+        const failed = failedStatus(e);
         return (
           <button
             key={e.id}
@@ -117,15 +137,36 @@ function HistoryRail({
                 <span className="text-success"> · −{pct}%</span>
               ) : kind === "history" ? (
                 <span> · history only · −{pct}%</span>
+              ) : kind === "skipped" ? (
+                <span> · nothing shrunk</span>
+              ) : kind === "bypassed" ? (
+                <span className="text-warning"> · bypassed</span>
+              ) : kind === "passthrough" ? (
+                <span> · passed through</span>
               ) : (
                 <span> · untouched</span>
               )}
+              {failed ? <span className="text-destructive"> · {e.status}</span> : null}
             </div>
           </button>
         );
           })(item.e)
         ),
       )}
+    </div>
+  );
+}
+
+function FailedBanner({ entry }: { entry: ProxyHistoryEntry }) {
+  const msg =
+    entry.status === "failed"
+      ? "The provider couldn't be reached (network error). Usually transient — the client retries."
+      : entry.status === "cancelled"
+        ? "The request was cancelled before the provider replied (client timed out or you stopped it)."
+        : `The provider rejected this request (HTTP ${entry.status}). miserly forwarded it unchanged — this is between your client and the provider, not a compression problem.`;
+  return (
+    <div className="border-b border-destructive/40 bg-destructive/10 px-3.5 py-2 text-[11px] text-destructive">
+      {msg}
     </div>
   );
 }
@@ -157,14 +198,48 @@ function Detail({
     );
   }
 
+  // States with no compressed block to show — each explains itself specifically.
   if (entry.blocks.length === 0) {
+    let headline = "Nothing was compressed";
+    let body: ReactNode = null;
+    if (entry.bypassed) {
+      headline = "Compression was off";
+      body = (
+        <>Compression was bypassed when this {entry.client} request passed through — nothing was
+        inspected or modified. Flip the switch above to resume compressing.</>
+      );
+    } else if (entry.endpoint) {
+      headline = "Passed through — not a chat request";
+      body = (
+        <>This was a <code>{entry.endpoint}</code> request. miserly only compresses chat
+        requests (<code>/v1/messages</code>, <code>/v1/chat/completions</code>); other endpoints
+        pass through untouched.</>
+      );
+    } else if (entry.skipped && entry.skipped.length > 0) {
+      headline = "Nothing was compressed — here's why";
+      body = (
+        <ul className="mt-1 space-y-1 text-left">
+          {entry.skipped.map((sk, i) => (
+            <li key={i}>
+              <span className="font-medium text-foreground">{sk.label}</span> · ~
+              {formatCompact(sk.tokens)} tok — {SKIP_REASON[sk.reason]}
+            </li>
+          ))}
+        </ul>
+      );
+    } else {
+      body = (
+        <>Every block was under the ~{formatCompact(entry.minTokens ?? 1500)}-token minimum, so
+        this {entry.client} request passed through untouched.</>
+      );
+    }
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-1 p-6 text-center">
-        <div className="text-sm font-medium">Nothing was compressed</div>
-        <p className="max-w-sm text-xs text-muted-foreground">
-          Every block in this {entry.client} request was under the minimum size, so it passed
-          through untouched.
-        </p>
+      <div className="flex flex-1 flex-col">
+        {entry.status && failedStatus(entry) ? <FailedBanner entry={entry} /> : null}
+        <div className="flex flex-1 flex-col items-center justify-center gap-1 p-6 text-center">
+          <div className="text-sm font-medium">{headline}</div>
+          <div className="max-w-sm text-xs text-muted-foreground">{body}</div>
+        </div>
       </div>
     );
   }
@@ -175,14 +250,15 @@ function Detail({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {entry.status && failedStatus(entry) ? <FailedBanner entry={entry} /> : null}
       {historyOnly ? (
         <div className="border-b border-border bg-secondary/40 px-3.5 py-2 text-[11px] text-muted-foreground">
           Only carried-over conversation history was compressed here — your latest message was
           under the size threshold, so it passed through untouched.
         </div>
       ) : null}
-      {/* Block chips — pick which compressed block to inspect */}
-      <div className="flex flex-wrap gap-1.5 border-b border-border px-3.5 py-2.5">
+      {/* Block chips — compressed blocks (clickable) + skipped blocks (muted) */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-3.5 py-2.5">
         {entry.blocks.map((b, i) => {
           const on = i === blockIdx;
           return (
@@ -201,6 +277,15 @@ function Detail({
             </button>
           );
         })}
+        {(entry.skipped ?? []).map((sk, i) => (
+          <span
+            key={"sk" + i}
+            title={SKIP_REASON[sk.reason]}
+            className="cursor-help rounded-full border border-dashed border-border px-2.5 py-1 text-[11px] text-muted-foreground/70"
+          >
+            {sk.label} · left alone
+          </span>
+        ))}
       </div>
 
       {/* Original | Compressed */}
@@ -296,6 +381,7 @@ export function ActivityMonitor({
   entries,
   capture,
   sessionSaved,
+  online,
   onClear,
   onToggleCapture,
 }: {
@@ -304,6 +390,7 @@ export function ActivityMonitor({
   entries: ProxyHistoryEntry[];
   capture: boolean;
   sessionSaved: number;
+  online: boolean;
   onClear: () => void;
   onToggleCapture: (value: boolean) => void;
 }) {
@@ -357,7 +444,7 @@ export function ActivityMonitor({
             Capture content
           </label>
           {entries.length > 0 ? (
-            <Button variant="ghost" size="sm" className="mr-8" onClick={onClear}>
+            <Button variant="ghost" size="sm" className="mr-8" onClick={onClear} disabled={!online}>
               <Trash2 className="h-3.5 w-3.5" />
               Clear
             </Button>
@@ -365,6 +452,13 @@ export function ActivityMonitor({
             <span className="mr-8" />
           )}
         </div>
+
+        {!online ? (
+          <div className="border-b border-warning/40 bg-warning/10 px-4 py-2 text-[11px] text-warning">
+            Proxy unreachable — showing the last snapshot. History is memory-only, so it clears
+            when the proxy restarts.
+          </div>
+        ) : null}
 
         {entries.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-1 p-8 text-center">
