@@ -206,7 +206,9 @@ function applyPatch(clean) {
 
 // --- load the engine through Vite SSR (same code the studio runs) -----------
 const vite = await createViteServer({
-  server: { middlewareMode: true },
+  // Module-loading only: no HMR websocket (its default port collides with the
+  // studio dev server's), no file watching.
+  server: { middlewareMode: true, hmr: false, ws: false, watch: null },
   appType: "custom",
   logLevel: "error",
 });
@@ -546,6 +548,21 @@ const server = http.createServer(async (req, res) => {
     }
     res.end(JSON.stringify({ error: { type: "miserly_proxy_error", message: String(err) } }));
   }
+});
+
+server.on("error", (err) => {
+  if (err?.code === "EADDRINUSE") {
+    console.error(`
+✗ Port ${PORT} is already in use — another miserly proxy (or something else) is listening there.
+
+  Find it:            lsof -i :${PORT}
+  Stop a proxy:       pkill -f "scripts/proxy.mjs"
+  Or use a new port:  MISERLY_PORT=4545 npm run proxy
+                      (then update the port in Settings → Integrations and your agent wiring)
+`);
+    process.exit(1);
+  }
+  throw err;
 });
 
 server.listen(PORT, "127.0.0.1", () => {
