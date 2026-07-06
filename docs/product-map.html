@@ -498,8 +498,9 @@ const NODES = [
       internal logs, proprietary code, customer conversations.</p>
     `,
     hood: `<p>Run history is kept in the browser's session storage (cleared when the tab closes).
-      The only network call in the entire app is a developer-mode-only "install optional feature"
-      button that talks to <code>localhost</code> — your own machine.</p>`
+      Every network call in the entire app talks to <code>localhost</code> — your own machine:
+      the developer-mode-only "install optional feature" button, and the Settings → Integrations
+      panel driving the local proxy's control API.</p>`
   },
   {
     id: "input", kind: "spine", icon: "📥", step: "Step 1",
@@ -512,8 +513,9 @@ const NODES = [
         transcript, meeting notes, documentation.</li>
         <li><strong>Drag &amp; drop a file</strong> onto the editor. Plain text works out of the box;
         PDF and Word documents work if the optional document-parsing extra is installed.</li>
-        <li><strong>Load a sample</strong> — five realistic built-in examples (noisy incident logs,
-        verbose code, a long runbook, a repetitive chat, a JSON event stream) so you can try the
+        <li><strong>Load a sample</strong> — six realistic built-in examples (noisy incident logs,
+        verbose code, a long runbook, a repetitive chat, a JSON event stream, a big nested
+        enterprise dataset) so you can try the
         whole product in one click without hunting for your own material.</li>
       </ul>
       <p>As you type or paste, a live counter shows characters, words, lines and — most importantly —
@@ -1076,7 +1078,10 @@ const INTEGRATIONS = [
         to disk, gone on restart.</li>
         <li><strong>Every request explains itself</strong> — blocks the proxy left alone say
         why (below the minimum, an instruction block, or the engine couldn't save ≥3%);
-        requests sent while compression was off show as <em>bypassed</em>; provider errors and
+        requests sent while compression was off show as <em>bypassed</em>; legacy generation
+        endpoints the proxy forwards without compressing show as <em>passed through</em>; a
+        “Hide untouched” switch collapses uncompressed rows into markers that say what they
+        hid; provider errors and
         cancellations get a status badge and a banner clarifying it's between your client and
         the provider. Token counts carry a <span class="mono">~</span> because they're fast
         estimates.</li>
@@ -1706,8 +1711,8 @@ const GUIDE = [
         <li><strong>“unable to get local issuer certificate”</strong> — your work network inspects
         HTTPS and Node doesn't trust the company certificate the way your browser does. Run
         <code>npm run proxy:trust</code> once (it exports your OS-trusted roots), then restart the
-        proxy — it auto-loads them. While unfixed, requests pass through untouched, so your agent
-        keeps working.</li>
+        proxy — it auto-loads them. While unfixed, the proxy can't reach the provider at all — requests fail
+        with a clear <code>miserly_tls_error</code> pointing at this exact fix.</li>
       </ul>
       <p>And remember the studio always works on its own — the proxy is an add-on, never a
       dependency.</p>

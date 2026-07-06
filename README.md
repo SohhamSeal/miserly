@@ -52,7 +52,7 @@ is never uploaded anywhere.
 
 ## Quick start
 
-**Requirements:** [Node.js](https://nodejs.org) 18+ and npm.
+**Requirements:** [Node.js](https://nodejs.org) 20.19+ (or 22.12+) and npm.
 
 ```bash
 # 1. Clone
@@ -165,6 +165,9 @@ Click the **gear icon** (top-right) to open a GitHub-style settings modal:
   These are runtime preferences saved in your browser.
 - **Tools & Features** — toggle each feature on/off. Heavy features that aren't
   installed show a disabled toggle with an **Install** button.
+- **Integrations** — the local proxy's control panel: live status, compression
+  settings (goal, budget, system-prompt policy), session savings, and the
+  **Open activity monitor** button.
 - **About** — privacy, what's real vs. simulated, version, license.
 
 ### About that in-app **Install** button
@@ -230,6 +233,10 @@ miserly/
 │  ├─ setup.mjs                 # interactive `npm run setup` installer
 │  ├─ install-feature.mjs       # installs one feature (used by the in-app button)
 │  ├─ vite-plugin-installer.mjs # dev-only endpoint behind the Install button
+│  ├─ proxy.mjs                 # local compressing LLM proxy (`npm run proxy`)
+│  ├─ integrations.mjs          # agent-wiring helpers for setup (aliases, proxy config)
+│  ├─ trust-ca.mjs              # `npm run proxy:trust` — corporate-CA export
+│  ├─ uninstall.mjs             # `npm run uninstall` — clean removal
 │  └─ lib.mjs                   # shared helpers (.env, npm, package detection)
 ├─ src/
 │  ├─ engine/                   # tokenizer, classifier, planner, runner, plugins
@@ -377,6 +384,8 @@ provider prompt-caching and can cost you money.
 | `npm run setup` | Interactive feature installer |
 | `npm run generate` | Regenerate the feature glue / adapters manually |
 | `npm run typecheck` | Run the TypeScript compiler with no emit |
+| `npm run test` | Run the test suite once (vitest) |
+| `npm run test:watch` | Run the tests in watch mode |
 | `npm run proxy` | Local LLM proxy — compresses requests in-flight on their way to the provider |
 | `npm run proxy:trust` | Trust your corporate TLS-inspection CA so the proxy can reach the provider |
 | `npm run uninstall` | Clean removal: heavy packages + machine-global config (`-- --dry-run` to preview) |
@@ -414,7 +423,7 @@ history in `sessionStorage` for its origin — clear site data for
 
 ## Tech stack
 
-React 18 · TypeScript · Vite · Tailwind CSS · Radix UI primitives · CodeMirror 6 ·
+React 19 · TypeScript · Vite · Tailwind CSS · Radix UI primitives · CodeMirror 6 ·
 Framer Motion · Zustand · `@clack/prompts` (installer).
 
 ---
@@ -426,7 +435,7 @@ Contributions are welcome! A good first contribution is a new optimizer plugin i
 
 1. Fork and clone the repo.
 2. `npm install`.
-3. Make your change; keep `npm run typecheck` and `npm run build` green.
+3. Make your change; keep `npm run typecheck`, `npm run test`, and `npm run build` green.
 4. Open a pull request describing the change.
 
 ---

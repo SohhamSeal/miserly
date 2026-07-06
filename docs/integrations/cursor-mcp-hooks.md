@@ -1,6 +1,6 @@
 # miserly × AI Agents — Context Optimization via Local Proxy, MCP & Hooks
 
-**Status:** Model A (local proxy) SHIPPED as `npm run proxy` / `scripts/proxy.mjs` — compresses user text + tool_result blocks of Anthropic `/v1/messages` in-flight. MCP & hooks: design only.
+**Status:** Model A (local proxy) SHIPPED as `npm run proxy` / `scripts/proxy.mjs` — compresses user text + tool-output blocks in-flight on Anthropic `/v1/messages`, OpenAI `/v1/chat/completions`, and `/v1/responses` (Codex CLI's default); `count_tokens` probes and legacy completion endpoints pass through untouched. MCP & hooks: design only.
 **Targets:** Claude Code, Codex, Aider (proxy) · Cursor (proxy w/ caveats + MCP/hooks)
 **Last updated:** 2026-06-29
 
@@ -44,7 +44,7 @@ A local server speaks the provider's API (OpenAI- and/or Anthropic-compatible). 
 Agent (Claude/Codex/Cursor-BYO)
   │  full request: system + history + ALL tool outputs
   ▼
-http://localhost:8787   ← miserly proxy (compress request, inject retrieve tool)
+http://localhost:4141   ← miserly proxy (compress request, inject retrieve tool)
   ▼
 real provider (Anthropic / OpenAI)
 ```
@@ -52,7 +52,7 @@ real provider (Anthropic / OpenAI)
 - It sees the **whole payload**, so it can compress *any* content — built-in `Read`/`Shell`/`Grep` output included — with no "MCP-only" restriction.
 - It's **editor-agnostic** (same proxy works across agents).
 - The "hooks can't rewrite the prompt" limit doesn't apply, because this isn't a hook.
-- Wiring: `ANTHROPIC_BASE_URL=http://localhost:8787 claude` (Claude Code), `OPENAI_BASE_URL=http://localhost:8787/v1` (Codex/Aider), or Cursor's *Override OpenAI Base URL* (BYO key only — see §1 caveat).
+- Wiring: `ANTHROPIC_BASE_URL=http://localhost:4141 claude` (Claude Code), `OPENAI_BASE_URL=http://localhost:4141/v1` (Codex/Aider), or Cursor's *Override OpenAI Base URL* (BYO key only — see §1 caveat).
 
 ### 3.2 MCP server (secondary, opt-in)
 
@@ -234,7 +234,7 @@ If the model decides it needs the full content, it calls `miserly_retrieve` and 
 
 ## 11. Open questions
 
-1. **Provider surface for the proxy:** OpenAI-compatible first (broadest), Anthropic-compatible, or both?
+1. **Provider surface for the proxy:** OpenAI-compatible first (broadest), Anthropic-compatible, or both? (Decided: both — the shipped proxy speaks Anthropic `/v1/messages` plus OpenAI `/v1/chat/completions` and `/v1/responses`.)
 2. **Streaming:** support from day one, or non-streaming MVP?
 3. **Engine packaging:** monorepo workspace (`packages/core`) vs published `@miserly/core`?
 4. **Config surface:** env vars, a `.miserly.json`, or reuse the studio's feature flags?

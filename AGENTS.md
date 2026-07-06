@@ -36,7 +36,7 @@ src/integrations/      Adapters for optional heavy packages (see “generated”
 src/lib/proxyClient.ts Typed client for the proxy's control API
 scripts/proxy.mjs      The inline proxy (loads the engine via Vite SSR)
 scripts/*.mjs          Installer / generator / uninstaller; features.config.mjs = catalog
-docs/product-map.html  Interactive product map (3 tabs); docs/*.md = design docs
+docs/product-map.html  Interactive product map (4 tabs); docs/*.md = design docs
 ```
 
 ## Invariants — do not break these
@@ -48,7 +48,12 @@ docs/product-map.html  Interactive product map (3 tabs); docs/*.md = design docs
    declare its safe types and add corruption tests.
 2. **Honest metrics.** Every displayed number is measured, never invented.
    Estimated token counts wear a `~`. Costs that go UP are shown signed and
-   red, never clamped to $0. Projections are labeled as projections.
+   red, never clamped to $0. Projections are labeled as projections. The
+   proxy's activity feed applies the same rule to absences: every chat
+   request gets a row, untouched blocks record WHY they were skipped
+   (below-threshold / instruction-block / no-gain), bypassed and legacy
+   passthrough requests still appear, and failed/cancelled requests carry
+   their status — never drop a row to make the feed look cleaner.
 3. **Provenance honesty.** Plugins declare `provenance: "native" |
    "reference-sim" | "external"` and `inspiredBy` credits. Never present a
    simulation as the real research technique, and never claim third-party
@@ -79,6 +84,17 @@ docs/product-map.html  Interactive product map (3 tabs); docs/*.md = design docs
     and the plugins). Any user-visible behavior change must update it — and
     the in-app Docs modal where relevant. Drift is this doc's only failure
     mode.
+11. **The proxy's hands-off contract.** The proxy compresses user-side text
+    and tool output in exactly three endpoints — `/v1/messages`,
+    `/v1/chat/completions`, `/v1/responses` (Codex CLI's default). It must
+    NEVER rewrite: assistant/model text, `function_call` / reasoning items,
+    injected instruction blocks (the `INSTRUCTION_TAGS` list:
+    `<system-reminder>`, `<user_instructions>`, `<environment_context>`),
+    the system prompt / `instructions` field (unless `compressSystem`), API
+    keys, or `/v1/messages/count_tokens` bodies (compressing a count probe
+    skews the numbers the client budgets with). Legacy `/v1/completions` /
+    `/v1/complete` pass through uncompressed (recorded as passthrough). If
+    you add an endpoint or body walker, keep this list intact.
 
 ## How the engine fits together (60 seconds)
 

@@ -18,7 +18,7 @@ miserly is a **local-first, transparent context-compression layer** with its **o
 
 [Headroom](https://github.com/chopratejas/headroom) already implements the "compress context in the agent loop" vision, and does it well: local proxy + library + MCP, real content-aware compressors (AST-aware code, ML prose, log/JSON/search), KV-cache alignment, CCR reversible retrieval, cross-agent memory, benchmarks. It is mature and trending.
 
-**Honest assessment:** on *raw token compression in the loop*, Headroom wins today. miserly's current engine is largely **simulated** (~9 of 11 optimizers). Competing head-to-head on "better compression" is a losing battle and is **not** the plan.
+**Honest assessment:** on *raw token compression in the loop*, Headroom wins today. miserly's current engine is real but deliberately simple — 9 of 11 optimizers are deterministic heuristics honestly badged **reference-sim** (approximations of published techniques, not the ML-grade compressors Headroom ships). Competing head-to-head on "better compression" is a losing battle and is **not** the plan.
 
 ---
 
@@ -63,20 +63,20 @@ miserly is a **local-first, transparent context-compression layer** with its **o
 
 ## 7. The core tension (read this before building anything)
 
-**A glass box is only valuable if what it shows is true.** Transparency is the *entire* value proposition. With the engine ~9/11 simulated today, the beautiful visualizations would be showing *fiction* — which is **worse** than a black box, because it actively misleads.
+**A glass box is only valuable if what it shows is true.** Transparency is the *entire* value proposition. The engine now does real work — every optimizer applies a real transform and every number shown is measured on actual output — but 9/11 optimizers remain deterministic approximations (**reference-sim**), so the gap to close is compression *depth*, not truthfulness.
 
 And because we chose **independent** (own engine, no borrowing Headroom's real compressors), we have to build that real engine ourselves.
 
-> **Therefore: "glass box + independent" = glass-box *positioning* with compete-on-engine *effort*.** The simulated engine is the #1 blocker, not a finished prototype. This is acceptable only if we go in eyes-open and prioritize accordingly.
+> **Therefore: "glass box + independent" = glass-box *positioning* with compete-on-engine *effort*.** Engine *depth* is the #1 gap: the deterministic engine is real and already in the loop, but it must grow benchmarked, content-aware compressors (and CCR retrieval) to fully back the positioning. This is acceptable only if we go in eyes-open and prioritize accordingly.
 
 ---
 
 ## 8. Critical path (de-risked sequencing)
 
 1. **Make the engine real — but narrow.** Don't fix all 11 optimizers. Pick **2–3 high-value content types** (logs, JSON, maybe code) and implement *real, benchmarked* compressors with honest before/after numbers. Everything downstream depends on this being true.
-2. **Headless `@miserly/core`.** Extract `src/engine` into an importable Node package (also unblocks proxy + CLI).
-3. **Own proxy + CCR retrieval.** Sit in the loop; defer (don't drop) detail so compression is safe.
-4. **Wire the glass box to the proxy.** Real-time view of what the proxy compressed/why/deferred, plus tunable rules the proxy enforces. This is where the existing UI becomes the moat.
+2. **Headless `@miserly/core`.** Extract `src/engine` into an importable Node package (the proxy already loads the engine via Vite SSR; extraction still unblocks a standalone CLI / library consumers).
+3. **Own proxy — shipped; CCR retrieval — still open.** `scripts/proxy.mjs` sits in the loop today (compresses `/v1/messages`, `/v1/chat/completions`, `/v1/responses`; `count_tokens` and legacy endpoints pass through untouched). Next: defer (don't drop) detail via CCR-style retrieval so compression is safe.
+4. **Wire the glass box to the proxy — first pass shipped.** The Activity Monitor already shows, live, what the proxy compressed and why blocks were skipped, and Settings → Integrations live-edits the rules the proxy enforces (goal, budget, threshold, system-prompt policy). Remaining: surface *deferred* detail once CCR retrieval exists. This is where the existing UI becomes the moat.
 5. **Benchmark vs Headroom throughout.** Learn from CCR / CacheAligner / content routing; stay independent, not ignorant.
 
 ---
