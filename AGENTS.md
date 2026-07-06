@@ -69,7 +69,10 @@ docs/product-map.html  Interactive product map (3 tabs); docs/*.md = design docs
    those stages — the budget loop must not override user-arranged pipelines.
 9. **Privacy.** No external network calls from the studio (fonts are
    self-hosted; the only fetches are localhost). The proxy forwards
-   credentials untouched and stores no request content.
+   credentials untouched and stores no request content by default — the
+   activity feed records metadata only; full text is kept ONLY behind the
+   explicit "capture request content" opt-in, in a memory-only ring buffer,
+   never on disk.
 10. **Docs travel with behavior.** `docs/product-map.html` is hand-mirrored
     from the code (its MODEL_DATA / OPTIMIZER_DATA tables mirror pricing.ts
     and the plugins). Any user-visible behavior change must update it — and

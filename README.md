@@ -285,6 +285,14 @@ curl localhost:4141/miserly/stats                                 # session savi
 curl localhost:4141/miserly/config                                # current settings
 ```
 
+**Watch what's flowing through it.** Settings → Integrations in the studio
+shows a live **activity feed**: every chat request this session — which client
+(Claude Code, Cursor, …), which model, which blocks were compressed, and the
+token savings. By default the feed stores **metadata only, never your text**.
+An explicit "Capture request content" toggle keeps the full before/after text
+too — in the proxy's memory only (max 200 requests, gone on restart, never
+written to disk) — with a visible "capturing content" badge while it's on.
+
 Every setting is live-editable the same way and persists to
 `~/.miserly/config.json`, so your preferences survive restarts. Environment
 variables (`MISERLY_PORT`, `MISERLY_UPSTREAM`, `MISERLY_GOAL`, `MISERLY_BUDGET`,

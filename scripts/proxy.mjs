@@ -72,6 +72,13 @@ const DEFAULTS = {
   minTokens: 1500,
   compressSystem: false,
   marker: false,
+  /**
+   * Activity-feed capture. false (default): the history records METADATA only
+   * — counts, clients, models, token deltas — never text. true: full
+   * before/after text is kept too, in a memory-only ring buffer (never disk),
+   * so the studio can show exactly what was compressed. Explicit opt-in.
+   */
+  captureContent: false,
   upstreams: {
     anthropic: "https://api.anthropic.com",
     openai: "https://api.openai.com",
@@ -90,6 +97,7 @@ function validatePatch(patch) {
       case "enabled":
       case "compressSystem":
       case "marker":
+      case "captureContent":
         if (typeof value !== "boolean") errors.push(`${key} must be a boolean`);
         else clean[key] = value;
         break;
@@ -208,6 +216,21 @@ const { runOptimization, countTokens } = engine;
 // --- compression -------------------------------------------------------------
 const totals = { requests: 0, blocks: 0, before: 0, after: 0 };
 
+// Activity feed: newest-first ring buffer of processed chat requests.
+// Memory only — restarting the proxy clears it; DELETE /miserly/history too.
+const MAX_HISTORY = 200;
+const MAX_CAPTURE_CHARS = 20_000;
+const history = [];
+
+function detectClient(headers, api) {
+  const ua = String(headers["user-agent"] ?? "").toLowerCase();
+  if (ua.includes("claude-cli") || ua.includes("claude-code")) return "Claude Code";
+  if (ua.includes("cursor")) return "Cursor";
+  if (ua.includes("aider")) return "Aider";
+  if (ua.includes("codex")) return "Codex";
+  return api === "openai" ? "OpenAI-compatible client" : "Anthropic client";
+}
+
 async function compressText(text) {
   const tokens = countTokens(text);
   if (tokens < CFG.minTokens) return null;
@@ -233,25 +256,31 @@ async function compressText(text) {
   return { out, tokens, optimized: result.optimizedTokens };
 }
 
-async function tryBlock(swaps, holder, key, label) {
+async function tryBlock(details, holder, key, label) {
   const value = holder[key];
   if (typeof value !== "string") return;
   const r = await compressText(value);
   if (r) {
     holder[key] = r.out;
-    swaps.push(`${label} ~${r.tokens.toLocaleString()}→~${r.optimized.toLocaleString()}`);
+    const d = { label, before: r.tokens, after: r.optimized };
+    if (CFG.captureContent) {
+      d.beforeText = value.slice(0, MAX_CAPTURE_CHARS);
+      d.afterText = r.out.slice(0, MAX_CAPTURE_CHARS);
+      d.truncated = value.length > MAX_CAPTURE_CHARS || r.out.length > MAX_CAPTURE_CHARS;
+    }
+    details.push(d);
   }
 }
 
 /** Compress eligible text in an Anthropic /v1/messages body, in place. */
 async function compressAnthropicBody(body) {
-  const swaps = [];
+  const details = [];
   if (CFG.compressSystem && body.system !== undefined) {
     if (typeof body.system === "string") {
-      await tryBlock(swaps, body, "system", "system");
+      await tryBlock(details, body, "system", "system");
     } else if (Array.isArray(body.system)) {
       for (const blk of body.system) {
-        if (blk?.type === "text") await tryBlock(swaps, blk, "text", "system");
+        if (blk?.type === "text") await tryBlock(details, blk, "text", "system");
       }
     }
   }
@@ -259,30 +288,30 @@ async function compressAnthropicBody(body) {
     // Never rewrite the model's own prior words — only what the USER side sends.
     if (msg?.role !== "user") continue;
     if (typeof msg.content === "string") {
-      await tryBlock(swaps, msg, "content", "user text");
+      await tryBlock(details, msg, "content", "user text");
       continue;
     }
     if (!Array.isArray(msg.content)) continue;
     for (const block of msg.content) {
       if (block?.type === "text") {
-        await tryBlock(swaps, block, "text", "user text");
+        await tryBlock(details, block, "text", "user text");
       } else if (block?.type === "tool_result") {
         if (typeof block.content === "string") {
-          await tryBlock(swaps, block, "content", "tool_result");
+          await tryBlock(details, block, "content", "tool_result");
         } else if (Array.isArray(block.content)) {
           for (const part of block.content) {
-            if (part?.type === "text") await tryBlock(swaps, part, "text", "tool_result");
+            if (part?.type === "text") await tryBlock(details, part, "text", "tool_result");
           }
         }
       }
     }
   }
-  return swaps;
+  return details;
 }
 
 /** Compress eligible text in an OpenAI /v1/chat/completions body, in place. */
 async function compressOpenAIBody(body) {
-  const swaps = [];
+  const details = [];
   for (const msg of body.messages ?? []) {
     const role = msg?.role;
     const isSystem = role === "system" || role === "developer";
@@ -290,15 +319,15 @@ async function compressOpenAIBody(body) {
     if (role === "assistant") continue; // never rewrite the model's own words
     const label = role === "tool" ? "tool message" : isSystem ? "system" : "user text";
     if (typeof msg.content === "string") {
-      await tryBlock(swaps, msg, "content", label);
+      await tryBlock(details, msg, "content", label);
       continue;
     }
     if (!Array.isArray(msg.content)) continue;
     for (const part of msg.content) {
-      if (part?.type === "text") await tryBlock(swaps, part, "text", label);
+      if (part?.type === "text") await tryBlock(details, part, "text", label);
     }
   }
-  return swaps;
+  return details;
 }
 
 // --- plumbing ----------------------------------------------------------------
@@ -337,7 +366,7 @@ function corsHeaders(req, res) {
   const origin = req.headers.origin;
   if (origin && isLocalOrigin(origin)) {
     res.setHeader("access-control-allow-origin", origin);
-    res.setHeader("access-control-allow-methods", "GET, PUT, OPTIONS");
+    res.setHeader("access-control-allow-methods", "GET, PUT, DELETE, OPTIONS");
     res.setHeader("access-control-allow-headers", "content-type");
   }
 }
@@ -385,6 +414,20 @@ async function handleControl(req, res) {
       saved: totals.before - totals.after,
       note: "token counts are estimates (~4 chars/token) unless the exact tokenizer is installed",
     });
+    return true;
+  }
+  if (req.url === "/miserly/history" && req.method === "GET") {
+    json(res, 200, { capture: CFG.captureContent, entries: history });
+    return true;
+  }
+  if (req.url === "/miserly/history" && req.method === "DELETE") {
+    const origin = req.headers.origin;
+    if (origin && !isLocalOrigin(origin)) {
+      json(res, 403, { error: "forbidden origin" });
+      return true;
+    }
+    history.length = 0;
+    json(res, 200, { ok: true });
     return true;
   }
   if (req.url === "/miserly/config" && req.method === "GET") {
@@ -436,16 +479,33 @@ const server = http.createServer(async (req, res) => {
     if (CFG.enabled && (isAnthropicChat || isOpenAIChat) && bodyBuf.length > 0) {
       try {
         const body = JSON.parse(bodyBuf.toString("utf8"));
-        const swaps = isAnthropicChat
+        const api = isAnthropicChat ? "anthropic" : "openai";
+        const details = isAnthropicChat
           ? await compressAnthropicBody(body)
           : await compressOpenAIBody(body);
-        if (swaps.length > 0) {
+        // Record EVERY parsed chat request — including "nothing over the
+        // threshold" ones — so the activity feed shows the whole picture.
+        history.unshift({
+          id: crypto.randomUUID(),
+          ts: Date.now(),
+          api,
+          client: detectClient(req.headers, api),
+          model: typeof body.model === "string" ? body.model : "unknown",
+          blocks: details,
+          before: details.reduce((a, d) => a + d.before, 0),
+          after: details.reduce((a, d) => a + d.after, 0),
+        });
+        if (history.length > MAX_HISTORY) history.pop();
+        if (details.length > 0) {
           totals.requests++;
           bodyBuf = Buffer.from(JSON.stringify(body), "utf8");
           const pct =
             totals.before > 0 ? Math.round((1 - totals.after / totals.before) * 100) : 0;
+          const swaps = details.map(
+            (d) => `${d.label} ~${d.before.toLocaleString()}→~${d.after.toLocaleString()}`,
+          );
           console.log(
-            `⇒ compressed ${swaps.length} block(s): ${swaps.join(", ")} · session total −${pct}% (~${(
+            `⇒ compressed ${details.length} block(s): ${swaps.join(", ")} · session total −${pct}% (~${(
               totals.before - totals.after
             ).toLocaleString()} tokens saved)`,
           );
@@ -497,6 +557,7 @@ server.listen(PORT, "127.0.0.1", () => {
    touches         user text & tool blocks over ~${CFG.minTokens.toLocaleString()} tokens
    system prompt   ${CFG.compressSystem ? "COMPRESSED (cache warning!)" : "untouched (default — protects prompt caching)"}
    upstreams       anthropic → ${CFG.upstreams.anthropic} · openai → ${CFG.upstreams.openai}
+   activity feed   ${CFG.captureContent ? "CAPTURING full content (memory-only, explicit opt-in)" : "metadata only — no request text stored"}
    config          ${CONFIG_PATH}
 
    Claude Code:        ANTHROPIC_BASE_URL=http://localhost:${PORT} claude

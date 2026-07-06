@@ -4,11 +4,14 @@ import { cn } from "@/lib/utils";
 import { formatCompact } from "@/lib/format";
 import { GOAL_LABELS, type OptimizationGoal } from "@/engine";
 import {
+  clearProxyHistory,
   getProxyConfig,
+  getProxyHistory,
   getProxyStats,
   patchProxyConfig,
   probeProxy,
   type ProxyConfig,
+  type ProxyHistoryEntry,
   type ProxyStats,
 } from "@/lib/proxyClient";
 import { useSettingsStore } from "@/store/useSettingsStore";
@@ -133,17 +136,108 @@ function OfflineView({ port }: { port: number }) {
   );
 }
 
+function timeOf(ts: number): string {
+  return new Date(ts).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function ActivityFeed({
+  entries,
+  capture,
+  onClear,
+}: {
+  entries: ProxyHistoryEntry[];
+  capture: boolean;
+  onClear: () => void;
+}) {
+  return (
+    <div className="mt-5">
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold">Recent activity</h3>
+        {entries.length > 0 ? (
+          <Button variant="ghost" size="sm" onClick={onClear}>
+            Clear
+          </Button>
+        ) : null}
+      </div>
+      <p className="mb-2 text-xs text-muted-foreground">
+        Every chat request that passed through the proxy this session (memory-only, newest
+        first{capture ? ", full content captured" : ", metadata only"}).
+      </p>
+      {entries.length === 0 ? (
+        <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+          No traffic yet — wire a client below and work normally; requests appear here.
+        </div>
+      ) : (
+        <div className="flex max-h-72 flex-col gap-1.5 overflow-y-auto pr-1">
+          {entries.map((e) => {
+            const pct = e.before > 0 ? Math.round((1 - e.after / e.before) * 100) : 0;
+            return (
+              <details
+                key={e.id}
+                className="rounded-md border border-border bg-card/60 px-3 py-2 text-xs"
+              >
+                <summary className="flex cursor-pointer list-none items-center gap-2">
+                  <span className="tabular-nums text-muted-foreground">{timeOf(e.ts)}</span>
+                  <span className="font-medium">{e.client}</span>
+                  <span className="truncate text-muted-foreground">{e.model}</span>
+                  <span className="ml-auto shrink-0 text-muted-foreground">
+                    {e.blocks.length === 0
+                      ? "nothing over threshold"
+                      : `${e.blocks.length} block(s) · ~${formatCompact(e.before)} → ~${formatCompact(
+                          e.after,
+                        )} (−${pct}%)`}
+                  </span>
+                </summary>
+                {e.blocks.length > 0 ? (
+                  <div className="mt-2 flex flex-col gap-2 border-t border-border/60 pt-2">
+                    {e.blocks.map((b, i) => (
+                      <div key={i}>
+                        <div className="text-muted-foreground">
+                          {b.label}: ~{formatCompact(b.before)} → ~{formatCompact(b.after)} tokens
+                          {b.truncated ? " · preview truncated" : ""}
+                        </div>
+                        {b.beforeText !== undefined ? (
+                          <div className="mt-1 grid gap-2 sm:grid-cols-2">
+                            <pre className="max-h-36 overflow-auto rounded border border-border bg-background p-2 text-[10.5px] leading-relaxed">
+                              {b.beforeText}
+                            </pre>
+                            <pre className="max-h-36 overflow-auto rounded border border-border bg-background p-2 text-[10.5px] leading-relaxed">
+                              {b.afterText}
+                            </pre>
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </details>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OnlineView({
   port,
   config,
   stats,
+  entries,
   onPatch,
+  onClearHistory,
   patchError,
 }: {
   port: number;
   config: ProxyConfig;
   stats: ProxyStats | null;
+  entries: ProxyHistoryEntry[];
   onPatch: (patch: Parameters<typeof patchProxyConfig>[1]) => void;
+  onClearHistory: () => void;
   patchError: string | null;
 }) {
   const pct = stats && stats.before > 0 ? Math.round((1 - stats.after / stats.before) * 100) : 0;
@@ -154,8 +248,13 @@ function OnlineView({
         <div className="flex items-center gap-2.5 text-sm">
           <StatusDot tone={config.enabled ? "on" : "bypass"} />
           <div>
-            <div className="font-medium">
+            <div className="flex items-center gap-2 font-medium">
               Running on :{port} — {config.enabled ? "compressing" : "bypassing (passthrough)"}
+              {config.captureContent ? (
+                <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
+                  ● capturing content
+                </span>
+              ) : null}
             </div>
             <div className="text-xs text-muted-foreground">
               {stats
@@ -274,6 +373,17 @@ function OnlineView({
         }
       />
       <Row
+        title="Capture request content"
+        description="Off (default): the activity feed stores metadata only — never your text. On: full before/after text is kept in the proxy's memory (max 200 requests, gone on restart, never written to disk)."
+        control={
+          <Switch
+            checked={config.captureContent}
+            onCheckedChange={(v) => onPatch({ captureContent: v })}
+            aria-label="Capture request content"
+          />
+        }
+      />
+      <Row
         title="Compression marker"
         description="Prepend a small “[miserly: …]” note to compressed blocks so the model knows."
         control={
@@ -284,6 +394,8 @@ function OnlineView({
           />
         }
       />
+
+      <ActivityFeed entries={entries} capture={config.captureContent} onClear={onClearHistory} />
 
       {/* Wiring */}
       <div className="mt-5">
@@ -327,6 +439,7 @@ export function IntegrationsPanel() {
   const [online, setOnline] = useState(false);
   const [config, setConfig] = useState<ProxyConfig | null>(null);
   const [stats, setStats] = useState<ProxyStats | null>(null);
+  const [entries, setEntries] = useState<ProxyHistoryEntry[]>([]);
   const [patchError, setPatchError] = useState<string | null>(null);
   const alive = useRef(true);
 
@@ -339,10 +452,15 @@ export function IntegrationsPanel() {
       return;
     }
     try {
-      const [cfg, st] = await Promise.all([getProxyConfig(port), getProxyStats(port)]);
+      const [cfg, st, hist] = await Promise.all([
+        getProxyConfig(port),
+        getProxyStats(port),
+        getProxyHistory(port),
+      ]);
       if (!alive.current) return;
       setConfig(cfg);
       setStats(st);
+      setEntries(hist.entries);
       setOnline(true);
     } catch {
       if (alive.current) setOnline(false);
@@ -378,6 +496,12 @@ export function IntegrationsPanel() {
     [port, refresh],
   );
 
+  const onClearHistory = useCallback(() => {
+    clearProxyHistory(port)
+      .then(() => alive.current && setEntries([]))
+      .catch(() => void refresh());
+  }, [port, refresh]);
+
   return (
     <div>
       <div className="mb-2">
@@ -396,7 +520,9 @@ export function IntegrationsPanel() {
           port={port}
           config={config}
           stats={stats}
+          entries={entries}
           onPatch={onPatch}
+          onClearHistory={onClearHistory}
           patchError={patchError}
         />
       ) : (

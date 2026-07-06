@@ -15,6 +15,8 @@ export interface ProxyConfig {
   minTokens: number;
   compressSystem: boolean;
   marker: boolean;
+  /** Activity feed: when true, full before/after text is kept (memory-only). */
+  captureContent: boolean;
   upstreams: { anthropic: string; openai: string };
   configPath: string;
 }
@@ -75,4 +77,35 @@ export function patchProxyConfig(
 
 export function getProxyStats(port: number): Promise<ProxyStats> {
   return request<ProxyStats>(`${base(port)}/stats`);
+}
+
+export interface ProxyHistoryBlock {
+  label: string;
+  before: number;
+  after: number;
+  /** Present only when content capture is enabled on the proxy. */
+  beforeText?: string;
+  afterText?: string;
+  truncated?: boolean;
+}
+
+export interface ProxyHistoryEntry {
+  id: string;
+  ts: number;
+  api: "anthropic" | "openai";
+  client: string;
+  model: string;
+  blocks: ProxyHistoryBlock[];
+  before: number;
+  after: number;
+}
+
+export function getProxyHistory(
+  port: number,
+): Promise<{ capture: boolean; entries: ProxyHistoryEntry[] }> {
+  return request(`${base(port)}/history`);
+}
+
+export function clearProxyHistory(port: number): Promise<{ ok: boolean }> {
+  return request(`${base(port)}/history`, { method: "DELETE" });
 }
