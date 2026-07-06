@@ -260,11 +260,45 @@ architecture as [Headroom](https://github.com/chopratejas/headroom):
 chat client ──► http://localhost:4141 (miserly proxy) ──► api.anthropic.com
 ```
 
+### Wiring Claude Code, step by step
+
+1. **Start the proxy** (leave this terminal running):
+   ```bash
+   npm run proxy
+   ```
+2. **Install the launcher alias** (one time): run `npm run setup`, pick
+   *Claude Code* at the "wire a coding agent?" step, and accept the aliases.
+   This writes a `miserly-claude` alias into your shell profile — a resilient
+   launcher that uses the proxy when it's running and **falls back to the real
+   API when it isn't**, so it always works.
+3. **Reload your shell** (only for terminals that were already open):
+   ```bash
+   source ~/.zshrc      # new terminals pick it up automatically
+   ```
+4. **Launch Claude Code with the alias — every time**:
+   ```bash
+   miserly-claude                  # instead of `claude`
+   miserly-claude --continue       # resume your previous conversation
+   ```
+5. **Verify**: work normally, then open the studio → Settings → Integrations
+   → *Open activity monitor* — your requests appear with their savings. Or:
+   `curl localhost:4141/miserly/stats`.
+
+> **The gotcha this flow prevents:** `ANTHROPIC_BASE_URL=… claude` only wires
+> the terminal you typed it in. Open a new terminal, run plain `claude`, and
+> that session silently talks to Anthropic directly — everything works, but
+> miserly never sees it and the monitor stays empty. The alias makes wiring
+> the default instead of something to remember.
+
+> **Restarts are a clean slate — by design.** The activity history lives only
+> in the proxy's memory (never on disk, for privacy), so restarting the proxy
+> clears the monitor. Savings shown are per-session.
+
+**Other clients:**
+
 ```bash
-npm run proxy
-# then, in another terminal — pick your client:
-ANTHROPIC_BASE_URL=http://localhost:4141 claude        # Claude Code
 OPENAI_BASE_URL=http://localhost:4141/v1 codex         # Codex / Aider
+# (or the miserly-codex / miserly-aider aliases from npm run setup)
 # Cursor (BYO key only): Settings → Models → Override OpenAI Base URL
 #   → http://localhost:4141/v1   (managed Cursor models can't be redirected)
 ```
