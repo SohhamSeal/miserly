@@ -556,11 +556,24 @@ const server = http.createServer(async (req, res) => {
       if (!HOP_BY_HOP.has(k.toLowerCase()) && v !== undefined) headers[k] = v;
     }
 
-    const upstreamRes = await fetch(upstreamFor(req.url ?? "/", req.headers) + req.url, {
-      method: req.method,
-      headers,
-      body: ["GET", "HEAD"].includes(req.method ?? "") ? undefined : bodyBuf,
-    });
+    // If the client hangs up while we wait on the provider, abort the upstream
+    // call too — otherwise stalled requests accumulate as zombie sockets (and
+    // corporate gateways love to stall).
+    const upstreamAbort = new AbortController();
+    const onClientGone = () => upstreamAbort.abort();
+    res.on("close", onClientGone);
+
+    let upstreamRes;
+    try {
+      upstreamRes = await fetch(upstreamFor(req.url ?? "/", req.headers) + req.url, {
+        method: req.method,
+        headers,
+        body: ["GET", "HEAD"].includes(req.method ?? "") ? undefined : bodyBuf,
+        signal: upstreamAbort.signal,
+      });
+    } finally {
+      res.off("close", onClientGone);
+    }
 
     res.statusCode = upstreamRes.status;
     upstreamRes.headers.forEach((value, key) => {
@@ -591,6 +604,33 @@ const server = http.createServer(async (req, res) => {
             type: "miserly_tls_error",
             message:
               "Upstream TLS certificate not trusted by Node. Your network likely inspects HTTPS. Run `npm run proxy:trust`, then restart the proxy.",
+          },
+        }),
+      );
+      return;
+    }
+    if (err?.name === "AbortError") {
+      // Client went away first — nothing to answer, nothing to log loudly.
+      res.destroy();
+      return;
+    }
+    const netCause = err?.cause?.code ?? err?.cause?.errors?.[0]?.code ?? err?.code;
+    if (netCause) {
+      // Network-level failure on the way to the provider (reset, stall, DNS…).
+      // Usually a transient path problem — corporate gateways with ~3-minute
+      // idle timeouts are a classic. The client will retry.
+      console.error(
+        `✗ upstream network failure (${netCause}) — usually transient (corporate gateway idle timeouts are a common cause). The client normally retries.`,
+      );
+      if (!res.headersSent) {
+        res.statusCode = 502;
+        res.setHeader("content-type", "application/json");
+      }
+      res.end(
+        JSON.stringify({
+          error: {
+            type: "miserly_upstream_network_error",
+            message: `Could not reach the provider (${netCause}). Usually transient — retry. If it persists, check your network path / VPN.`,
           },
         }),
       );
