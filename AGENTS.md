@@ -56,8 +56,9 @@ docs/product-map.html  Interactive product map (3 tabs); docs/*.md = design docs
    numbers exceed float64 precision (see `hasPrecisionRisk`). Applies to any
    new JSON-rewriting code.
 5. **Lean by default.** `gpt-tokenizer`, `pdfjs-dist`, `mammoth` are opt-in
-   installs and must NOT be committed to `package.json`. If an in-app install
-   ran during testing, revert the manifest before committing.
+   installs and must NOT appear in `package.json`. The installer uses
+   `npm install --no-save`, so the manifest stays pristine by construction —
+   if you ever see it modified with heavy deps, restore it before committing.
 6. **Generated files are not source.** Never hand-edit
    `src/features.generated.ts`, `src/integrations/generated.ts`, or the
    materialized adapters (`accurate.ts`, `real.ts`) — edit the `.ts.tmpl`
