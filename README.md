@@ -294,7 +294,14 @@ too — in the proxy's memory only (max 200 requests, gone on restart, never
 written to disk) — with a visible "capturing content" badge while it's on.
 
 Every setting is live-editable the same way and persists to
-`~/.miserly/config.json`, so your preferences survive restarts. Environment
+`~/.miserly/config.json`, so your preferences survive restarts.
+
+> **Corporate network?** If the proxy logs `unable to get local issuer
+> certificate`, your network inspects HTTPS (Cisco Secure Access, Zscaler,
+> Netskope…) and Node doesn't trust the company cert the way your browser does.
+> Run `npm run proxy:trust` once — it exports your OS-trusted roots to
+> `~/.miserly/corp-ca.pem`, which the proxy auto-loads on the next start.
+> Nothing is weakened: it trusts exactly what your OS already trusts. Environment
 variables (`MISERLY_PORT`, `MISERLY_UPSTREAM`, `MISERLY_GOAL`, `MISERLY_BUDGET`,
 `MISERLY_MIN_TOKENS`, `MISERLY_COMPRESS_SYSTEM`, `MISERLY_MARKER`,
 `MISERLY_ENABLED`, `MISERLY_CONFIG_PATH`) still work as session-only overrides.
@@ -316,6 +323,7 @@ provider prompt-caching and can cost you money.
 | `npm run generate` | Regenerate the feature glue / adapters manually |
 | `npm run typecheck` | Run the TypeScript compiler with no emit |
 | `npm run proxy` | Local LLM proxy — compresses requests in-flight on their way to the provider |
+| `npm run proxy:trust` | Trust your corporate TLS-inspection CA so the proxy can reach the provider |
 | `npm run uninstall` | Clean removal: heavy packages + machine-global config (`-- --dry-run` to preview) |
 
 ---

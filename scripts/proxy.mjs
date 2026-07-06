@@ -50,10 +50,27 @@
 // content; API keys pass through untouched to the provider.
 // -----------------------------------------------------------------------------
 import http from "node:http";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createServer as createViteServer } from "vite";
+
+// --- corporate TLS interception -------------------------------------------
+// If a CA bundle exists (from `npm run proxy:trust`) and Node isn't already
+// trusting it, re-exec ourselves with NODE_EXTRA_CA_CERTS set — it's only read
+// at process start, so this is the one reliable way to make outbound fetch
+// trust a company's inspection certificate.
+const CA_BUNDLE = process.env.MISERLY_CA_CERTS ?? join(homedir(), ".miserly", "corp-ca.pem");
+if (!process.env.NODE_EXTRA_CA_CERTS && existsSync(CA_BUNDLE)) {
+  const res = spawnSync(
+    process.execPath,
+    [fileURLToPath(import.meta.url), ...process.argv.slice(2)],
+    { stdio: "inherit", env: { ...process.env, NODE_EXTRA_CA_CERTS: CA_BUNDLE } },
+  );
+  process.exit(res.status ?? 0);
+}
 
 const PORT = Number(process.env.MISERLY_PORT ?? 4141);
 const CONFIG_PATH =
@@ -466,6 +483,22 @@ async function handleControl(req, res) {
   return false;
 }
 
+let certWarned = false;
+function warnCertOnce() {
+  if (certWarned) return;
+  certWarned = true;
+  console.error(`
+✗ Can't reach the provider: Node doesn't trust the upstream TLS certificate.
+  Your network appears to inspect HTTPS (Cisco / Zscaler / Netskope / etc.).
+
+  Fix it once:
+      npm run proxy:trust      # exports your OS-trusted CAs to ~/.miserly/corp-ca.pem
+      npm run proxy            # restart — it auto-loads that bundle
+
+  (Requests are passing through UNCHANGED until this is fixed — your agent still works.)
+`);
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     if (req.url?.startsWith("/miserly/")) {
@@ -541,6 +574,28 @@ const server = http.createServer(async (req, res) => {
     }
     res.end();
   } catch (err) {
+    const cause = err?.cause?.code ?? err?.code;
+    const isCertError =
+      cause === "UNABLE_TO_GET_ISSUER_CERT_LOCALLY" ||
+      cause === "SELF_SIGNED_CERT_IN_CHAIN" ||
+      cause === "CERT_UNTRUSTED";
+    if (isCertError) {
+      warnCertOnce();
+      if (!res.headersSent) {
+        res.statusCode = 502;
+        res.setHeader("content-type", "application/json");
+      }
+      res.end(
+        JSON.stringify({
+          error: {
+            type: "miserly_tls_error",
+            message:
+              "Upstream TLS certificate not trusted by Node. Your network likely inspects HTTPS. Run `npm run proxy:trust`, then restart the proxy.",
+          },
+        }),
+      );
+      return;
+    }
     console.error("miserly proxy error:", err);
     if (!res.headersSent) {
       res.statusCode = 502;
@@ -575,6 +630,11 @@ server.listen(PORT, "127.0.0.1", () => {
    system prompt   ${CFG.compressSystem ? "COMPRESSED (cache warning!)" : "untouched (default — protects prompt caching)"}
    upstreams       anthropic → ${CFG.upstreams.anthropic} · openai → ${CFG.upstreams.openai}
    activity feed   ${CFG.captureContent ? "CAPTURING full content (memory-only, explicit opt-in)" : "metadata only — no request text stored"}
+   corporate CA    ${
+     process.env.NODE_EXTRA_CA_CERTS
+       ? "trusting " + process.env.NODE_EXTRA_CA_CERTS
+       : "system default (run `npm run proxy:trust` if your network inspects TLS)"
+   }
    config          ${CONFIG_PATH}
 
    Claude Code:        ANTHROPIC_BASE_URL=http://localhost:${PORT} claude

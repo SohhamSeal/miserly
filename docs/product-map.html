@@ -1688,6 +1688,11 @@ const GUIDE = [
         <li><strong>Port 4141 is taken</strong> — start with <code>MISERLY_PORT=4545 npm run
         proxy</code>, update the port in the Integrations panel, and re-wire the agent to the new
         port.</li>
+        <li><strong>“unable to get local issuer certificate”</strong> — your work network inspects
+        HTTPS and Node doesn't trust the company certificate the way your browser does. Run
+        <code>npm run proxy:trust</code> once (it exports your OS-trusted roots), then restart the
+        proxy — it auto-loads them. While unfixed, requests pass through untouched, so your agent
+        keeps working.</li>
       </ul>
       <p>And remember the studio always works on its own — the proxy is an add-on, never a
       dependency.</p>

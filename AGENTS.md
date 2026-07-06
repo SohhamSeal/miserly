@@ -17,6 +17,7 @@ user's machine — browser studio + optional local proxy. Nothing is uploaded.
 | `npm run setup` | Interactive installer: features + optional agent wiring (proxy defaults, aliases) |
 | `npm run generate` | Regenerate feature glue / integration adapters |
 | `npm run uninstall` | Clean removal (`-- --dry-run` to preview) |
+| `npm run proxy:trust` | Export OS-trusted CAs to ~/.miserly/corp-ca.pem (corporate TLS interception) |
 
 ## Repo map
 
