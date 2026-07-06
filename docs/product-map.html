@@ -533,7 +533,9 @@ const NODES = [
         can't reach the number, it tells you honestly instead of pretending.</li>
       </ul>
       <p>The plan is fully explained on screen — which tools were chosen, in what order, and
-      <em>why</em> — before and after it runs. No black box.</p>
+      <em>why</em> — before and after it runs. No black box. And when it deliberately goes easy
+      (a small input that already fits the budget), it says that too — with the exact hint for
+      how to squeeze harder.</p>
     `,
     hood: `<p>Budget fitting is closed-loop: the pipeline is executed silently at increasing
       strength levels with a binary search over the aggressiveness floor, measuring real token
@@ -739,6 +741,37 @@ const NODES = [
       so restoring an old run faithfully restores its recipe.</p>`
   },
   {
+    id: "proxy", kind: "branch", parent: "output", icon: "🔌",
+    title: "Inline mode — wire your coding agent",
+    blurb: "",
+    body: `
+      <p>You don't have to paste anything. miserly can sit <strong>between your coding
+      agent and the AI provider</strong> and shrink context automatically, in-flight:</p>
+      <p style="text-align:center" class="mono">your agent → miserly proxy → the model</p>
+      <ul>
+        <li><strong>One command</strong> — <code>npm run proxy</code>, then point your agent at it
+        (Claude Code, Codex, Aider, or Cursor with your own key).</li>
+        <li><strong>It only touches the bulk</strong> — oversized pasted text and tool results.
+        Your questions, the model's replies, your API key and your system prompt pass through
+        untouched.</li>
+        <li><strong>On/off is one switch, no restarts</strong> — traffic always flows; compression
+        is a live toggle. Turning it off never breaks a wired agent.</li>
+        <li><strong>Controlled from the studio</strong> — Settings → Integrations is the proxy's
+        control room: status, savings, and every knob, live.</li>
+      </ul>
+      <div class="example"><div class="exlabel">For example</div>
+      A coding agent reads a 120-record JSON event log with a tool. On its way to the model, that
+      tool result becomes one compact table — about half the tokens — and the agent never knows
+      the difference.</div>
+      <p>Full details on the <strong>Integrations &amp; services</strong> tab of this map.</p>
+    `,
+    hood: `<p>The proxy speaks both provider shapes (Anthropic /v1/messages and OpenAI
+      /v1/chat/completions) and routes each to the right upstream. Settings persist to
+      ~/.miserly/config.json via a validated localhost-only control API. Cursor's managed
+      models route through Cursor's servers and cannot be intercepted — only its
+      bring-your-own-key mode works.</p>`
+  },
+  {
     id: "settings", kind: "branch", parent: "output", icon: "⚙️",
     title: "Settings & optional extras",
     blurb: "",
@@ -774,6 +807,8 @@ const NODES = [
         <li><strong>AI builders</strong> trimming RAG bundles, tool outputs and conversation history
         in their apps and agents.</li>
         <li><strong>Prompt writers</strong> auditing where their token budget actually goes.</li>
+        <li><strong>Coding-agent users</strong> — wire Claude Code, Codex or Cursor (BYO key)
+        through the built-in proxy and oversized tool results shrink automatically, in-flight.</li>
       </ul>
       <p><strong>Next</strong> on the roadmap: a command-line version and an MCP server (so AI
       agents can call miserly automatically), a stage-by-stage diff viewer, pinned "never touch
@@ -794,6 +829,8 @@ const NODES = [
 const GROUPS = [
   { id: "addons", title: "Optional add-ons · bigger downloads, off by default",
     note: "miserly installs lean. These two extras are real downloads, so YOU decide whether they're worth the disk space — everything works without them, just less precisely." },
+  { id: "agents", title: "For coding agents · the inline proxy",
+    note: "Skip the pasting: wire your coding agent straight through miserly and big tool results shrink on their way to the model — the same engine, inline." },
   { id: "builtin", title: "Built-in features · on by default, toggle any time",
     note: "No downloads — these ship with the app and can be flipped on/off in Settings (or with an environment flag)." },
   { id: "models", title: "Supported AI models · the cost catalog",
@@ -919,6 +956,64 @@ const INTEGRATIONS = [
     hood: ``
   },
 
+  /* ---------- coding-agent integration ---------- */
+  {
+    id: "svc-proxy", kind: "card", tab: "integrations", group: "agents",
+    icon: "🔌", title: "The inline proxy",
+    chips: [["on", "npm run proxy"], ["price", "Claude Code · Codex · Cursor (BYO)"], ["on", "live on/off — no restarts"]],
+    crumb: "Coding-agent integration · scripts/proxy.mjs",
+    body: `
+      <p>A tiny local server that sits between your coding agent and the AI provider. Every
+      request passes through it; blocks that are <strong>big enough to matter</strong> (pasted
+      dumps and tool results over ~1,500 tokens) get compressed by the same engine the studio
+      uses — a 120-record JSON event stream becomes one table at roughly half the tokens.</p>
+      <ul>
+        <li><strong>Start it:</strong> <code>npm run proxy</code></li>
+        <li><strong>Claude Code:</strong> <code>ANTHROPIC_BASE_URL=http://localhost:4141 claude</code></li>
+        <li><strong>Codex / Aider:</strong> <code>OPENAI_BASE_URL=http://localhost:4141/v1</code></li>
+        <li><strong>Cursor:</strong> only with your own API key — Settings → Models → Override
+        OpenAI Base URL. Cursor's managed models route through Cursor's servers and cannot be
+        redirected.</li>
+      </ul>
+      <p><strong>Never touched:</strong> your questions, the model's own words, your API key, and
+      — by default — your system prompt, because compressing a <em>cached</em> system prompt
+      breaks provider prompt-caching and can cost more than it saves.</p>
+      <div class="example"><div class="exlabel">The off switch</div>
+      Traffic always flows; compression is a live toggle. Turn it off and requests pass through
+      byte-for-byte — a wired agent never breaks, and no restarts are ever needed. Settings
+      persist to <span class="mono">~/.miserly/config.json</span>.</div>
+      <p>Session savings any time: <code>curl localhost:4141/miserly/stats</code>.</p>
+    `,
+    hood: `<p>The proxy loads the engine through Vite's SSR module loader, so it runs the exact
+      code the studio runs — no separate build. Per-block budget defaults to half the block's own
+      size (demanding enough that the closed-loop budget fit engages). A validated, localhost-only
+      control API (GET/PUT /miserly/config) drives it; foreign-origin writes are rejected.</p>`
+  },
+  {
+    id: "svc-proxy-panel", kind: "card", tab: "integrations", group: "agents",
+    icon: "🎛️", title: "Integrations control panel",
+    chips: [["on", "in the studio Settings"], ["on", "live status + savings"]],
+    crumb: "Coding-agent integration · Settings → Integrations",
+    body: `
+      <p>The proxy's control room lives inside the studio — <strong>Settings →
+      Integrations</strong> — so turning things on and off never means a terminal:</p>
+      <ul>
+        <li><strong>Status at a glance</strong> — a live dot: green (compressing), amber
+        (bypassing), grey (not running), plus this session's request count and tokens saved.</li>
+        <li><strong>The master toggle</strong> — flips the actual proxy instantly; the setting
+        persists across restarts.</li>
+        <li><strong>Every knob, live</strong> — goal, per-block budget, minimum block size,
+        system-prompt compression (with the cache-cost warning), and the compression marker.</li>
+        <li><strong>Wire-up helpers</strong> — copy-paste commands for each client.</li>
+      </ul>
+      <p>When the proxy isn't running, the panel doesn't break — it shows the start command and
+      reconnects by itself the moment the proxy comes up.</p>
+    `,
+    hood: `<p>The panel polls the proxy's localhost control API every 4 seconds while open,
+      applies changes optimistically, and reconciles with the proxy's validated response. The
+      port is editable and remembered by the studio.</p>`
+  },
+
   /* ---------- built-in toggles ---------- */
   {
     id: "svc-animations", kind: "card", tab: "integrations", group: "builtin",
@@ -993,7 +1088,7 @@ const INTEGRATIONS = [
     chips: [["on", "ON by default"], ["on", "no download"]],
     crumb: "Built-in feature · env flag: VITE_FEATURE_SAMPLE_DOCUMENTS",
     body: `
-      <p>Five realistic, one-click examples so anyone can experience the whole product in thirty
+      <p>Six realistic, one-click examples so anyone can experience the whole product in thirty
       seconds without hunting for material:</p>
       <ul>
         <li><strong>Incident logs + stack trace</strong> — noisy service logs with repetition.</li>
@@ -1001,6 +1096,8 @@ const INTEGRATIONS = [
         <li><strong>Knowledge base / runbook</strong> — a long Markdown document.</li>
         <li><strong>Chat history</strong> — a repetitive multi-turn conversation.</li>
         <li><strong>Kubernetes events (JSON)</strong> — a stream of near-duplicate data records.</li>
+        <li><strong>Enterprise dataset (big JSON)</strong> — a large nested commerce dataset whose
+        record arrays become TOON tables (try it with Maximum compression).</li>
       </ul>
       <p>Each one is chosen to show off a different part of the engine. Teams embedding miserly
       can switch them off for a cleaner UI.</p>
@@ -1031,6 +1128,10 @@ const INTEGRATIONS = [
       </ul>
       <p>Whatever door you use, the same rule holds: features you don't have simply fall back
       gracefully. The app never breaks for lacking an extra.</p>
+      <p>Leaving is just as clean: <code>npm run uninstall</code> removes the heavy packages and
+      the proxy's machine-global config, reminds you to un-wire any clients first, and tells you
+      exactly what's left to delete by hand (<code>-- --dry-run</code> previews it). miserly
+      installs no global packages, daemons or launch agents.</p>
     `,
     hood: `<p>The in-app install endpoint only exists in dev mode, only accepts requests from
       localhost origins, validates the feature name against the catalog whitelist, and serializes
@@ -1108,7 +1209,7 @@ const OPTIMIZER_DATA = [
     steps: [
       "Normalize noise — long hex IDs, UUIDs and timestamps get shortened to consistent stand-ins.",
       "Compact JSON — pretty-printed blocks collapse onto single lines (skipped entirely if the block holds a number too precise to round-trip safely, like a 19-digit ID).",
-      "Fold repeats — consecutive duplicate lines become one line with a “⟲ ×N” marker.",
+      "Fold repeats — consecutive duplicate lines become one line with a “⟲ ×N” marker (including identical free-standing JSON records in log streams).",
       "Trim stack traces — keeps the top frames (6 normally, 3 when the slider is above 70%) and notes how many were omitted.",
       "Squeeze whitespace.",
     ],
@@ -1123,6 +1224,7 @@ const OPTIMIZER_DATA = [
     steps: [
       "Parse each JSON block (skipped entirely if it holds a number too precise to round-trip safely).",
       "Encode it BOTH ways — TOON (unquoted keys, tables for record arrays) and plain minified JSON.",
+      "Fold JSONL streams — a run of one-record-per-line JSON (log/event exports) is gathered into a single table too.",
       "The calculator: measure the token count of each encoding and ship whichever is smaller — per block, and again per array (table form vs list form). Never assumed, always measured.",
       "Fold duplicate lines across the whole document, collapse stack traces to their top 3 frames, squeeze whitespace.",
     ],
