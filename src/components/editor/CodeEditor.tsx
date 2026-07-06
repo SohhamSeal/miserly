@@ -85,6 +85,24 @@ function languageExtension(contentType?: ContentType): Extension[] {
   return LANG_BY_TYPE[contentType]?.() ?? [];
 }
 
+// When a FILE is dropped onto the editor, CodeMirror's built-in drop handler
+// would insert the file's text at the cursor — but the InputPanel wrapper also
+// ingests the same file via `ingestFile`, so the content ends up duplicated.
+// This handler runs on CodeMirror's own (native) drop listener, which fires
+// before the event bubbles to the React wrapper. Returning `true` for a file
+// drop cancels CM's default insert (and calls preventDefault) but does NOT stop
+// propagation, so the wrapper still runs `ingestFile` exactly once. Normal text
+// drags within the editor return `false` and behave as usual.
+const suppressFileDrop = EditorView.domEventHandlers({
+  drop: (event) => {
+    if (event.dataTransfer && event.dataTransfer.files.length > 0) {
+      event.preventDefault();
+      return true;
+    }
+    return false;
+  },
+});
+
 export interface CodeEditorProps {
   value: string;
   onChange?: (value: string) => void;
@@ -106,7 +124,7 @@ export function CodeEditor({
 }: CodeEditorProps) {
   const resolvedTheme = useResolvedTheme();
   const extensions = useMemo(() => {
-    const ext = languageExtension(contentType);
+    const ext = [...languageExtension(contentType), suppressFileDrop];
     return lineWrap ? [...ext, EditorView.lineWrapping] : ext;
   }, [contentType, lineWrap]);
 

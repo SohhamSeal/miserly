@@ -1,6 +1,8 @@
 import { clamp } from "@/lib/utils";
 import { getPlugin } from "./registry";
-import type { ManualStage } from "./types";
+import { segment } from "./segmenter";
+import { countTokens } from "./tokenizer";
+import type { ContentType, ManualStage, PluginCategory } from "./types";
 
 /**
  * Live preview model for the Pipeline Builder.
@@ -45,18 +47,59 @@ export interface PipelineProjection {
   }>;
 }
 
+/** Segment types a plugin category's transforms are allowed to modify. */
+const STRUCTURED_TYPES: ReadonlySet<ContentType> = new Set([
+  "json",
+  "code",
+  "sql",
+  "stacktrace",
+  "logs",
+]);
+
+function touchableFraction(category: PluginCategory, text: string): number {
+  let touchable = 0;
+  let total = 0;
+  for (const s of segment(text)) {
+    const tokens = countTokens(s.text);
+    total += tokens;
+    const structured = STRUCTURED_TYPES.has(s.type);
+    // Structural/code optimizers work on structured content; the prose-facing
+    // categories (semantic, summarization, retrieval, general) only ever see
+    // prose-ish segments — the segment guards pass the rest through untouched.
+    if (category === "structural" || category === "code") {
+      if (structured) touchable += tokens;
+    } else if (!structured) {
+      touchable += tokens;
+    }
+  }
+  return total > 0 ? touchable / total : 1;
+}
+
 /**
  * Chain the per-stage ratios to project how a manual pipeline shrinks a given
  * starting token count. Stages are applied in array order.
+ *
+ * When `text` is provided, each stage's expected reduction is scaled by the
+ * fraction of the document its transforms are actually allowed to touch —
+ * without this, a prose summarizer "projects" full compression on a document
+ * that is 90% JSON it will pass through untouched.
  */
 export function projectManualPipeline(
   stages: ManualStage[],
   startTokens: number,
+  text?: string,
 ): PipelineProjection {
   let tokens = startTokens;
   const perStage: PipelineProjection["perStage"] = [];
   for (const stage of stages) {
-    const ratio = stageRatio(stage.pluginId, stage.aggressiveness);
+    let ratio = stageRatio(stage.pluginId, stage.aggressiveness);
+    if (text !== undefined) {
+      const plugin = getPlugin(stage.pluginId);
+      if (plugin) {
+        const fraction = touchableFraction(plugin.metadata.category, text);
+        ratio = 1 - (1 - ratio) * fraction;
+      }
+    }
     const before = tokens;
     tokens = Math.round(tokens * ratio);
     perStage.push({

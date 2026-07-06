@@ -67,6 +67,12 @@ export function OutputPanel() {
   const outText = edited ?? result?.outputText ?? "";
   const isEdited = edited !== null && edited !== result?.outputText;
 
+  // Editing back to exactly the engine's output clears the edit (null) so the
+  // report / cost / budget cards fall back to the pristine engine numbers; any
+  // other text is stored so those cards recompute from what's on screen.
+  const handleEdit = (text: string) =>
+    setEdited(text === result?.outputText ? null : text);
+
   // Token count + reduction track the edited text so the numbers stay honest.
   const optimizedTokens = useMemo(
     () => (edited === null ? result?.optimizedTokens ?? 0 : countTokens(edited)),
@@ -165,7 +171,7 @@ export function OutputPanel() {
             <div className="h-full overflow-hidden px-1 pb-4">
               <Editor
                 value={outText}
-                onChange={setEdited}
+                onChange={handleEdit}
                 lineWrap={wrap}
                 contentType={result.classification.primary}
               />
@@ -186,7 +192,7 @@ export function OutputPanel() {
       <div className="h-[42vh] min-h-[320px]">
         <Editor
           value={outText}
-          onChange={setEdited}
+          onChange={handleEdit}
           lineWrap={wrap}
           contentType={result.classification.primary}
         />

@@ -1,4 +1,5 @@
 import { useDeferredValue, useMemo, useRef, useState } from "react";
+import type { DragEvent as ReactDragEvent } from "react";
 import { ClipboardPaste, FileUp, FlaskConical, Trash2, Upload } from "lucide-react";
 import { useStudioStore } from "@/store/useStudioStore";
 import { useFeatureEnabled } from "@/store/useSettingsStore";
@@ -61,6 +62,15 @@ export function InputPanel() {
   const [isDragging, setIsDragging] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Drag events bubble through child elements, so a naive onDragLeave fires
+  // whenever the pointer crosses into a child and the overlay flickers. Track
+  // enter/leave depth and only hide the overlay once it reaches zero.
+  const dragDepth = useRef(0);
+
+  // Only react to drags that actually carry files (not text/selection drags).
+  function isFileDrag(e: ReactDragEvent): boolean {
+    return e.dataTransfer.types.includes("Files");
+  }
 
   const deferredInput = useDeferredValue(input);
   // `accurate` is a dependency so the live count recomputes when the user
@@ -216,13 +226,28 @@ export function InputPanel() {
 
       <div
         className="relative h-[42vh] min-h-[320px]"
-        onDragOver={(e) => {
-          e.preventDefault();
+        onDragEnter={(e) => {
+          if (!isFileDrag(e)) return;
+          dragDepth.current += 1;
           setIsDragging(true);
         }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={(e) => {
+        onDragOver={(e) => {
+          if (!isFileDrag(e)) return;
+          // Only claim file drops; text/selection drags fall through to the editor.
           e.preventDefault();
+        }}
+        onDragLeave={(e) => {
+          if (!isFileDrag(e)) return;
+          dragDepth.current = Math.max(0, dragDepth.current - 1);
+          if (dragDepth.current === 0) setIsDragging(false);
+        }}
+        onDrop={(e) => {
+          // preventDefault + stopPropagation keep the rich editor from also
+          // seeing the drop; the CodeEditor drop extension is the real backstop
+          // (its native listener runs before this bubbles), so we only ingest.
+          e.preventDefault();
+          e.stopPropagation();
+          dragDepth.current = 0;
           setIsDragging(false);
           const file = e.dataTransfer.files?.[0];
           if (file) void ingestFile(file);

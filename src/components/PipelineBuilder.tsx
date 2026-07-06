@@ -316,6 +316,13 @@ export function PipelineBuilder() {
   const goal = useStudioStore((s) => s.goal);
   const targetBudget = useStudioStore((s) => s.targetBudget);
 
+  // classify() + planPipeline() + countTokens() are expensive on large inputs.
+  // Deferring the input keeps the pipeline-config controls (stage toggles,
+  // sliders, reorder) instant while the input-derived projection catches up a
+  // frame or two later — so typing no longer janks the open dialog. The config
+  // controls read live store state, not this deferred copy.
+  const deferredInput = React.useDeferredValue(input);
+
   const mode = usePipelineStore((s) => s.mode);
   const contentType = usePipelineStore((s) => s.contentType);
   const stages = usePipelineStore((s) => s.stages);
@@ -337,13 +344,13 @@ export function PipelineBuilder() {
 
   // Classification drives compatibility hints + the automatic-plan preview.
   const classification = React.useMemo(() => {
-    if (input.trim() === "") return null;
+    if (deferredInput.trim() === "") return null;
     try {
-      return classify(input, contentType === "auto" ? undefined : contentType);
+      return classify(deferredInput, contentType === "auto" ? undefined : contentType);
     } catch {
       return null;
     }
-  }, [input, contentType]);
+  }, [deferredInput, contentType]);
 
   const effectiveType: ContentType =
     contentType !== "auto" ? contentType : classification?.primary ?? "mixed";
@@ -358,16 +365,16 @@ export function PipelineBuilder() {
   }, [classification, goal, targetBudget]);
 
   const startTokens = React.useMemo(
-    () => (input.trim() === "" ? 0 : countTokens(input)),
-    [input],
+    () => (deferredInput.trim() === "" ? 0 : countTokens(deferredInput)),
+    [deferredInput],
   );
 
   // The list "Reset to Auto plan" would produce right now. When the current
   // stages already equal it, resetting is a no-op, so we disable the button
   // (otherwise clicking it looks like nothing happens).
   const autoSeed = React.useMemo(
-    () => computeSeedStages(input, goal, targetBudget, contentType),
-    [input, goal, targetBudget, contentType],
+    () => computeSeedStages(deferredInput, goal, targetBudget, contentType),
+    [deferredInput, goal, targetBudget, contentType],
   );
   const atAutoPlan = React.useMemo(() => {
     if (stages.length !== autoSeed.length) return false;
@@ -382,9 +389,17 @@ export function PipelineBuilder() {
   }, [stages, autoSeed]);
 
   const enabledStages = stages.filter((s) => s.enabled);
-  const projection = projectManualPipeline(
-    enabledStages.map((s) => ({ pluginId: s.pluginId, aggressiveness: s.aggressiveness })),
-    startTokens,
+  // Stages are live (instant), startTokens is deferred — so toggling a stage or
+  // dragging a slider reprojects immediately, while typing in the input reflows
+  // the projection a beat later along with the deferred classification.
+  const projection = React.useMemo(
+    () =>
+      projectManualPipeline(
+        enabledStages.map((s) => ({ pluginId: s.pluginId, aggressiveness: s.aggressiveness })),
+        startTokens,
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stages, startTokens],
   );
 
   const warnings: Array<{ level: "warn" | "info"; text: string }> = [];

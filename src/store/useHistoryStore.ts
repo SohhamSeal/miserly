@@ -96,6 +96,11 @@ export const useHistoryStore = create<HistoryState>()(
       name: "miserly-history",
       version: 1,
       storage: safeSessionStorage,
+      // Persist only the entries, never `activeId`: the studio store that holds
+      // the actual loaded run is NOT persisted, so on reload nothing is really
+      // "active". Persisting activeId would highlight a run in the sidebar while
+      // the studio shows the empty state — a desync. It starts null every load.
+      partialize: (state) => ({ entries: state.entries }),
     },
   ),
 );

@@ -1,7 +1,6 @@
 import { AlertTriangle, Coins } from "lucide-react";
 import { useStudioStore } from "@/store/useStudioStore";
-import { useFeatureEnabled } from "@/store/useSettingsStore";
-import { MODELS, compareCost, countTokens, formatUSD, getModel } from "@/engine";
+import { MODELS, compareCost, countTokens, formatUSD, getModel, inputRateFor } from "@/engine";
 import {
   formatCompact,
   formatMs,
@@ -25,7 +24,9 @@ import { MetricTile, TypeChip } from "@/components/common";
 function qualityRating(score: number): { label: string; cls: string } {
   if (score >= 0.95) return { label: "Excellent", cls: "text-success" };
   if (score >= 0.9) return { label: "Great", cls: "text-success" };
-  if (score >= 0.8) return { label: "Good", cls: "text-emerald-300" };
+  // Use the theme-aware token, not a fixed dark-only shade — text-emerald-300 on
+  // a light background fails contrast.
+  if (score >= 0.8) return { label: "Good", cls: "text-success" };
   if (score >= 0.7) return { label: "Fair", cls: "text-warning" };
   return { label: "Risky", cls: "text-destructive" };
 }
@@ -35,8 +36,6 @@ export function ReportCard() {
   const modelId = useStudioStore((s) => s.modelId);
   const setModelId = useStudioStore((s) => s.setModelId);
   const editedOutput = useStudioStore((s) => s.editedOutput);
-  // All hooks must run before any early return (Rules of Hooks).
-  const accurate = useFeatureEnabled("accurateTokenizer");
 
   if (!result) return null;
 
@@ -58,9 +57,14 @@ export function ReportCard() {
   const rating = qualityRating(result.validation.confidence);
   const { classification, validation, plan } = result;
   const increased = cost.saved < 0;
-  // Prefix token counts with "~" when the exact tokenizer is off.
-  const tk = (n: number) => (accurate ? "" : "~") + formatNumber(n);
-  const estNote = accurate
+  // Effective per-1M input rate (honors the long-context surcharge tier), so the
+  // pricing hints match the numbers when a big prompt crosses the threshold.
+  const effectiveRate = inputRateFor(cost.beforeTokens, model);
+  // Report numbers reflect the tokenizer that MEASURED this run, not whatever is
+  // toggled now — a stored run keeps its label even after you flip the setting.
+  const runExact = result.tokenizerKind === "exact";
+  const tk = (n: number) => (runExact ? "" : "~") + formatNumber(n);
+  const estNote = runExact
     ? ""
     : " (estimated ~4 chars/token — enable the accurate tokenizer in Settings for exact counts)";
 
@@ -97,7 +101,7 @@ export function ReportCard() {
             </span>
           }
         >
-          <div className="w-[190px]">
+          <div className="w-[150px] sm:w-[190px]">
             <Select value={modelId} onValueChange={setModelId}>
               <SelectTrigger aria-label="Pricing model">
                 <SelectValue />
@@ -171,14 +175,17 @@ export function ReportCard() {
             hint="Percentage of tokens removed."
           />
           <MetricTile
-            label="Tokens saved"
-            value={tk(tokensSaved)}
+            label={tokensSaved < 0 ? "Tokens added" : "Tokens saved"}
+            value={`${tokensSaved < 0 ? "+" : ""}${tk(Math.abs(tokensSaved))}`}
+            valueClassName={tokensSaved < 0 ? "text-destructive" : undefined}
             hint={`Original minus optimized tokens.${estNote}`}
           />
           <MetricTile
             label="Cost before"
             value={formatUSD(cost.beforeCost)}
-            hint={`Input cost at ${model.label} pricing ($${model.inputPerM}/1M tokens).`}
+            hint={`Input cost at ${model.label} pricing ($${effectiveRate}/1M tokens${
+              effectiveRate !== model.inputPerM ? ", long-context tier" : ""
+            }).`}
           />
           <MetricTile
             label="Cost after"
@@ -199,9 +206,10 @@ export function ReportCard() {
           />
           <MetricTile
             label="Latency"
-            value={`~${formatPct(latency)}`}
-            sub="estimated faster"
-            hint="Rough estimate — fewer input tokens generally means lower time-to-first-token."
+            value={`${latency < 0 ? "" : "~"}${formatPct(latency)}`}
+            sub={latency < 0 ? "slower" : "estimated faster"}
+            valueClassName={latency < 0 ? "text-destructive" : undefined}
+            hint="Rough estimate — fewer input tokens generally means lower time-to-first-token. A larger output means more, not less."
           />
           <MetricTile
             label="Compute time"

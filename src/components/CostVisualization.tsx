@@ -58,6 +58,14 @@ export function CostVisualization() {
   const magnitude = formatUSD(Math.abs(cost.saved));
   const cache = analyzeCache(result.originalTokens, optimizedTokens, model);
 
+  // Sub-cent per-call deltas (e.g. "$0.0020") are hard to read. When the saving
+  // (or extra cost) rounds below a cent, show the same figure scaled to 1,000
+  // calls so the impact is legible. Muted, so it stays a secondary hint.
+  const subCent = Math.abs(cost.saved) > 0 && Math.abs(cost.saved) < 0.01;
+  const per1kLabel = subCent
+    ? `≈ ${formatUSD(Math.abs(cost.saved) * 1000)} per 1,000 calls`
+    : null;
+
   return (
     <CollapsibleCard
       title="Cost comparison"
@@ -130,6 +138,9 @@ export function CostVisualization() {
                 {formatPct(Math.abs(cost.savedPct))} {increased ? "more expensive" : "cheaper"} per
                 call
               </div>
+              {per1kLabel ? (
+                <div className="text-[11px] text-muted-foreground">{per1kLabel}</div>
+              ) : null}
             </div>
           </div>
         </Tip>

@@ -65,6 +65,13 @@ export interface PlanInput {
   goal: OptimizationGoal;
   targetBudget: number;
   enabledPluginIds?: string[];
+  /**
+   * Pack as many compatible stages as the goal allows instead of stopping when
+   * the (rough, metadata-based) projection first fits the budget. The runner
+   * uses this as a fallback when the MEASURED output of the normal plan cannot
+   * reach the budget even at maximum aggressiveness.
+   */
+  exhaustive?: boolean;
 }
 
 export function planPipeline(input: PlanInput): PlanResult {
@@ -108,8 +115,16 @@ export function planPipeline(input: PlanInput): PlanResult {
 
   const chosen: Array<{ p: OptimizerPlugin; reason: string }> = [];
   const pool = [...scored];
-  while (chosen.length < maxStages && pool.length > 0) {
-    if (projected <= targetBudget && goal !== "max_compression" && chosen.length >= 1) {
+  const stageCap = input.exhaustive ? 5 : maxStages;
+  let earlyStopped = false;
+  while (chosen.length < stageCap && pool.length > 0) {
+    if (
+      !input.exhaustive &&
+      projected <= targetBudget &&
+      goal !== "max_compression" &&
+      chosen.length >= 1
+    ) {
+      earlyStopped = true;
       break;
     }
     const next = pool.shift()!;
@@ -142,6 +157,15 @@ export function planPipeline(input: PlanInput): PlanResult {
       reductionPct * 100,
     )}% smaller) — estimated from each optimizer's typical ratio; the real figure is measured after the run.`,
   ];
+  if (earlyStopped) {
+    // Say the quiet part out loud — a light plan on a small input confuses
+    // people who expected maximum squeeze.
+    reasoning.push(
+      `Stopped adding stages early: the projection already fits your ${formatCompact(
+        targetBudget,
+      )}-token budget, so quality is preserved. Pick “${GOAL_LABELS.max_compression}” or a lower budget to squeeze harder.`,
+    );
+  }
 
   return {
     goal,

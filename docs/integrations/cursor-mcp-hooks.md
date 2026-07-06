@@ -1,6 +1,6 @@
 # miserly × AI Agents — Context Optimization via Local Proxy, MCP & Hooks
 
-**Status:** Design / feasibility (no implementation yet)
+**Status:** Model A (local proxy) SHIPPED as `npm run proxy` / `scripts/proxy.mjs` — compresses user text + tool_result blocks of Anthropic `/v1/messages` in-flight. MCP & hooks: design only.
 **Targets:** Claude Code, Codex, Aider (proxy) · Cursor (proxy w/ caveats + MCP/hooks)
 **Last updated:** 2026-06-29
 

@@ -16,6 +16,8 @@ export {
   getModel,
   contextCost,
   cacheReadCost,
+  cacheWriteCost,
+  inputRateFor,
   compareCost,
   analyzeCache,
   formatUSD,

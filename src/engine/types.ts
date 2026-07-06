@@ -51,6 +51,12 @@ export interface ModelPricing {
    * (we don't invent a number for those). Drives the "reused prompt" advisory.
    */
   cacheReadPerM?: number;
+  /**
+   * USD per 1,000,000 tokens for a CACHE WRITE. Some providers (e.g. Anthropic)
+   * charge a premium (~1.25× input) to create the cache entry. Omitted when
+   * writing costs the same as a normal input token.
+   */
+  cacheWritePerM?: number;
   contextWindow: number;
   tokenizer: TokenizerFamily;
   /**
@@ -246,6 +252,12 @@ export interface OptimizationResult {
   totalDurationMs: number;
   budgetBefore: BudgetSegment[];
   budgetAfter: BudgetSegment[];
+  /**
+   * Which tokenizer measured this run's counts. "exact" = gpt-tokenizer,
+   * "estimated" = the chars/4 heuristic. Stamped at run time so the UI can
+   * label stored numbers correctly even after the user toggles the tokenizer.
+   */
+  tokenizerKind: "exact" | "estimated";
   createdAt: number;
 }
 
@@ -296,6 +308,18 @@ export interface RunOptions {
    * — a proper injected pace callback is a later refactor.
    */
   pace?: number;
+  /**
+   * Live pace override, read before every staged nap. Lets the UI offer a
+   * "skip animation" control mid-run (return 0 to fast-forward the remaining
+   * delays). Takes precedence over `pace` when provided.
+   */
+  getPace?: () => number;
+  /**
+   * Cooperative cancellation. The runner checks this at every phase and stage
+   * boundary (including between budget-fit probes) and throws an AbortError,
+   * so a cancelled run stops computing instead of racing on in the background.
+   */
+  signal?: AbortSignal;
 }
 
 export interface RunCallbacks {

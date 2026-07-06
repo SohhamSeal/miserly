@@ -1,5 +1,6 @@
 import { assertNever, clamp, sleep } from "@/lib/utils";
 import { formatCompact, formatNumber } from "@/lib/format";
+import { activeTokenizerKind } from "@/integrations";
 import { buildBudgetAfter, buildBudgetBefore } from "./budget";
 import { classify } from "./classifier";
 import { GOAL_LABELS, PHASE_INFO, TYPE_LABELS } from "./labels";
@@ -7,6 +8,7 @@ import { planPipeline } from "./planner";
 import { defaultAggressiveness } from "./plugins/_base";
 import { getPlugin } from "./registry";
 import { countTokens } from "./tokenizer";
+import { NOISE_SUBS } from "./transforms";
 import type {
   ClassificationResult,
   CompressOutput,
@@ -80,9 +82,19 @@ const ENTITY_STOPWORDS = new Set([
 ]);
 
 function extractEntities(text: string): string[] {
+  // Every alternative is \b-anchored so we never extract a mid-word fragment
+  // ("Phone" out of "iPhone") that would then fail its own word-boundary
+  // presence test — a byte-identical output must always score 100%.
   const matches =
-    text.match(/[A-Z][a-zA-Z]{2,}|\b\d+(?:\.\d+)?\b|[A-Z_]{3,}|ERROR|FATAL/g) ?? [];
-  return [...new Set(matches)].filter((e) => !ENTITY_STOPWORDS.has(e)).slice(0, 250);
+    text.match(/\b[A-Z][a-zA-Z]{2,}\b|\b\d+(?:\.\d+)?\b|\b[A-Z_]{3,}\b/g) ?? [];
+  // IDs/timestamps the engine deliberately rewrites to placeholders (<uuid>,
+  // <ts>, <hash>) are not "lost information" — exempt anything that lives
+  // inside a noise span so normalizeNoise doesn't tank its own validation.
+  const noiseSpans = NOISE_SUBS.flatMap(([re]) => text.match(re) ?? []).join("\n");
+  return [...new Set(matches)]
+    .filter((e) => !ENTITY_STOPWORDS.has(e))
+    .filter((e) => !noiseSpans.includes(e))
+    .slice(0, 250);
 }
 
 function escapeRegExp(s: string): string {
@@ -240,27 +252,37 @@ interface BudgetFit {
  * overshoots at 4,300 — so it returns floor ≈ 0.78, and the animated run uses
  * that, ending exactly where the search predicted.
  */
-function fitToBudget(
+async function fitToBudget(
   input: string,
   plan: PlanResult,
   classification: ClassificationResult,
   goal: OptimizationGoal,
   targetBudget: number,
-): BudgetFit {
+  signal?: AbortSignal,
+): Promise<BudgetFit> {
   const base = defaultAggressiveness(goal);
   const ceiling = escalationCeiling(goal);
+  // Each probe runs the full pipeline synchronously; yielding a macrotask
+  // between probes keeps the UI responsive on large inputs and gives an
+  // aborted run a place to actually stop.
+  const breathe = async () => {
+    await new Promise((r) => setTimeout(r, 0));
+    signal?.throwIfAborted();
+  };
 
   // Already within budget at base, or no headroom to escalate → leave as planned.
   const baseline = measurePipeline(input, plan.stages, classification, goal, targetBudget, 0);
   if (baseline <= targetBudget || ceiling <= base) {
     return { floor: 0, met: baseline <= targetBudget, projectedTokens: baseline };
   }
+  await breathe();
 
   // Even maximum effort can't fit it → report the unreachable floor honestly.
   const maxed = measurePipeline(input, plan.stages, classification, goal, targetBudget, ceiling);
   if (maxed > targetBudget) {
     return { floor: ceiling, met: false, projectedTokens: maxed };
   }
+  await breathe();
 
   let lo = base;
   let hi = ceiling;
@@ -276,6 +298,7 @@ function fitToBudget(
     } else {
       lo = mid;
     }
+    await breathe();
   }
   return { floor: bestFloor, met: true, projectedTokens: bestTokens };
 }
@@ -289,12 +312,18 @@ export async function runOptimization(
   options: RunOptions,
   callbacks: RunCallbacks = {},
 ): Promise<OptimizationResult> {
-  const { input, goal, targetBudget } = options;
+  const { input, goal, targetBudget, signal } = options;
   // Staged delays are pure presentation — the real compute is sub-millisecond.
   // `pace` scales every nap: 1 = full animation, 0 = instant (Animations off or
   // reduced-motion), so the tweak → rerun loop isn't gated on fake latency.
-  const pace = Math.max(0, options.pace ?? 1);
-  const nap = (ms: number) => sleep(Math.round(ms * pace));
+  // `getPace` is consulted live so a "Skip" click mid-run fast-forwards the rest.
+  const basePace = Math.max(0, options.pace ?? 1);
+  const nap = async (ms: number) => {
+    signal?.throwIfAborted();
+    const pace = Math.max(0, options.getPace?.() ?? basePace);
+    await sleep(Math.round(ms * pace));
+    signal?.throwIfAborted();
+  };
   const phases = initialPhases();
   const emitPhases = () => callbacks.onPhases?.(phases.map((p) => ({ ...p })));
   const setPhase = (id: PhaseId, patch: Partial<PipelinePhase>) => {
@@ -346,7 +375,7 @@ export async function runOptimization(
   setPhase("planning", { status: "running" });
   await nap(420);
   const isManual = options.manualPlan !== undefined;
-  const plan = isManual
+  let plan = isManual
     ? buildManualPlan(options.manualPlan!, goal, targetBudget)
     : planPipeline({
         classification,
@@ -375,7 +404,42 @@ export async function runOptimization(
   // per-stage breakdown equals the final result the search predicted.
   let aggFloor = 0;
   if (!isManual && plan.stages.length > 0) {
-    const fit = fitToBudget(input, plan, classification, goal, targetBudget);
+    let fit = await fitToBudget(input, plan, classification, goal, targetBudget, signal);
+    if (!fit.met) {
+      // The normal plan can't reach the budget even at this goal's ceiling —
+      // before declaring the budget unreachable, try a deeper plan: pushing the
+      // SAME stages harder is not the only lever, adding stages is the other.
+      // (This also compensates for the planner's rough metadata projection
+      // under-provisioning stages.)
+      const deeper = planPipeline({
+        classification,
+        goal,
+        targetBudget,
+        enabledPluginIds: options.enabledPluginIds,
+        exhaustive: true,
+      });
+      if (deeper.stages.length > plan.stages.length) {
+        const deeperFit = await fitToBudget(
+          input,
+          deeper,
+          classification,
+          goal,
+          targetBudget,
+          signal,
+        );
+        if (deeperFit.projectedTokens < fit.projectedTokens) {
+          plan = {
+            ...deeper,
+            reasoning: [
+              ...deeper.reasoning,
+              "Added stages beyond the initial plan — the shorter pipeline couldn't reach the budget even at maximum aggressiveness.",
+            ],
+          };
+          fit = deeperFit;
+          log("info", "Extended the pipeline to get closer to the token budget.");
+        }
+      }
+    }
     aggFloor = fit.floor;
     if (aggFloor > 0 && fit.met) {
       log(
@@ -400,6 +464,7 @@ export async function runOptimization(
   const total = plan.stages.length;
 
   for (let i = 0; i < plan.stages.length; i++) {
+    signal?.throwIfAborted();
     const planned = plan.stages[i];
     const plugin = getPlugin(planned.pluginId);
     if (!plugin) continue;
@@ -541,6 +606,7 @@ export async function runOptimization(
     totalDurationMs: stages.reduce((a, s) => a + s.durationMs, 0),
     budgetBefore: buildBudgetBefore(input),
     budgetAfter: buildBudgetAfter(currentText),
+    tokenizerKind: activeTokenizerKind(),
     createdAt: Date.now(),
   };
   setPhase("assembly", { status: "completed", detail: `${formatCompact(optimizedTokens)} tokens` });

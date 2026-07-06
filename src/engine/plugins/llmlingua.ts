@@ -6,11 +6,13 @@ export default definePlugin(
     id: "llmlingua",
     name: "LLMLingua",
     description:
-      "Token-level prompt compression. Drops low-information tokens from prose and chat while preserving the meaning a model needs.",
+      "Token-level prompt compression. Drops low-information filler tokens from prose and chat while preserving the meaning a model needs. (Approximation of the LLMLingua idea using deterministic filler removal — not a perplexity model.)",
     author: "miserly",
     version: "1.x",
     category: "semantic",
-    capabilities: ["token pruning", "perplexity-guided drop"],
+    // Honest capability list: this is deterministic filler/stopword pruning, not
+    // the perplexity-scored token dropping the real LLMLingua paper performs.
+    capabilities: ["filler-token pruning", "whitespace collapse"],
     supportedTypes: ["prose", "chat", "markdown", "mixed", "rag"],
     ratioRange: [0.25, 0.5],
     provenance: "reference-sim",

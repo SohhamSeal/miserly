@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import {
+  ArrowDown,
   BookOpen,
   Boxes,
   Cpu,
@@ -135,6 +136,64 @@ function Callout({
   );
 }
 
+function FlowBox({ title, detail }: { title: string; detail?: ReactNode }) {
+  return (
+    <div className="w-full rounded-lg border border-border bg-card px-3 py-2 text-center shadow-sm">
+      <div className="text-sm font-medium leading-snug text-foreground">{title}</div>
+      {detail ? (
+        <div className="mt-0.5 text-xs leading-snug text-muted-foreground">{detail}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function FlowArrow() {
+  return (
+    <ArrowDown aria-hidden="true" className="my-1 h-4 w-4 shrink-0 text-muted-foreground/60" />
+  );
+}
+
+function PipelineFlowchart() {
+  return (
+    <div className="mt-3 w-full max-w-[640px] rounded-xl border border-border bg-secondary/30 p-4">
+      <div className="flex flex-col items-center">
+        <FlowBox title="Your text" />
+        <FlowArrow />
+        <FlowBox title="Detect content type" detail="logs · JSON · code · chat · docs…" />
+        <FlowArrow />
+        <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+          <div className="min-w-0 sm:flex-1">
+            <FlowBox title="Filter" detail="keep optimizers that support that type" />
+          </div>
+          <div
+            aria-hidden="true"
+            className="hidden w-4 shrink-0 border-t border-dashed border-border sm:block"
+          />
+          <p className="rounded-lg border border-dashed border-border bg-card/50 px-2.5 py-1.5 text-xs leading-snug text-muted-foreground sm:w-44 sm:shrink-0">
+            RAG-only tools (xRAG) join only via manual override
+          </p>
+        </div>
+        <FlowArrow />
+        <FlowBox title="Score by your goal" detail="size vs quality vs speed" />
+        <FlowArrow />
+        <FlowBox
+          title="Take the top few"
+          detail="max 2 per family — stop once the budget looks met"
+        />
+        <FlowArrow />
+        <FlowBox
+          title="Run in fixed family order"
+          detail="structure → code → words → retrieval → summary"
+        />
+        <FlowArrow />
+        <FlowBox title="Measure" detail="budget missed? tighten & re-plan" />
+        <FlowArrow />
+        <FlowBox title="Report" />
+      </div>
+    </div>
+  );
+}
+
 function Faq({ q, children }: { q: string; children: ReactNode }) {
   return (
     <div className="border-b border-border/60 py-3.5 last:border-0">
@@ -205,12 +264,19 @@ function EnginePanel() {
         subtitle="A simulated pipeline — but the numbers are honest."
       />
       <P>
-        miserly is a fully local, in-browser studio. The optimization{" "}
+        miserly is a fully local, in-browser studio. Most optimization{" "}
         <span className="font-medium text-foreground">algorithms are simulated</span> for this
         prototype, but the <span className="font-medium text-foreground">measurements are real</span>
         : token counts come from an actual tokenizer (or a fast estimate), and the text
         transformations genuinely change the text — so the reduction you see is measured, not
         invented.
+      </P>
+      <P>
+        Not all of it is simulated, though.{" "}
+        <span className="font-medium text-foreground">Toonify</span> natively re-encodes uniform
+        JSON arrays as real TOON tables — keys declared once in a{" "}
+        <Code>{"users[3]{id,name}:"}</Code> header, then one CSV row per element — and only keeps
+        the table when a measured token count beats plain minified JSON.
       </P>
 
       <H>The pipeline</H>
@@ -219,7 +285,40 @@ function EnginePanel() {
           { title: "Detect", body: "Classifies the input (code, JSON, logs, prose, mixed…) with a confidence score." },
           { title: "Plan", body: "Selects an ordered set of optimizers suited to that type and your chosen goal." },
           { title: "Compress", body: "Runs each stage live — you watch progress in the pipeline panel." },
-          { title: "Validate", body: "Estimates semantic similarity and information retention, and flags risky results." },
+          { title: "Validate", body: "Measures word overlap and key-entity retention against the original, and flags risky results." },
+        ]}
+      />
+
+      <H>How miserly picks your pipeline</H>
+      <PipelineFlowchart />
+      <Bullets
+        items={[
+          <>
+            Auto-detection only ever produces logs, JSON, code, stack traces, Markdown, chat, SQL,
+            prose or mixed.{" "}
+            <span className="font-medium text-foreground">RAG documents</span> and{" "}
+            <span className="font-medium text-foreground">Knowledge base</span> exist only as
+            manual overrides in the Pipeline Builder — so xRAG, which supports nothing else, never
+            enters an auto plan.
+          </>,
+          <>
+            Scores blend your goal's weights for reduction, quality and speed (
+            <span className="font-medium text-foreground">Fastest</span> penalizes summarization
+            and retrieval stages), with full compatibility credit for the primary type and half
+            for the secondary.
+          </>,
+          <>
+            Plans cap at 4 stages — 2 for Fastest, 5 for Max compression — with at most 2 per
+            family, and stop early once the rough projection fits your budget (Max compression
+            keeps packing). If the measured result still misses the budget at maximum
+            aggressiveness, the runner re-plans exhaustively with up to 5 stages.
+          </>,
+          <>
+            In practice four optimizers do most of the auto-mode work: Headroom, Ponytail,
+            LLMLingua and Summarizer. Toonify and Claw compete for the second structural slot —
+            Claw wins on reduction-hungry goals but never runs on JSON — and 500xCompressor
+            appears under Max compression or an exhaustive re-plan.
+          </>,
         ]}
       />
 
@@ -370,8 +469,8 @@ function FaqPanel() {
       <div className="mt-2">
         <Faq q="Are the savings real?">
           Yes — the token reductions are measured on genuinely transformed text (deduplication, JSON
-          minification, whitespace trimming, restructuring). The optimizer algorithms themselves are
-          simulated, so treat the quality scores as indicative rather than guaranteed.
+          minification, TOON re-encoding, whitespace trimming, restructuring). Most optimizer
+          algorithms are simulated, so treat the quality scores as indicative rather than guaranteed.
         </Faq>
         <Faq q="Does miserly send my text to an LLM?">
           Never. It only counts and transforms text locally; nothing is uploaded.
