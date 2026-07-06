@@ -252,21 +252,38 @@ chat client ──► http://localhost:4141 (miserly proxy) ──► api.anthro
 
 ```bash
 npm run proxy
-# then, in another terminal:
-ANTHROPIC_BASE_URL=http://localhost:4141 claude
+# then, in another terminal — pick your client:
+ANTHROPIC_BASE_URL=http://localhost:4141 claude        # Claude Code
+OPENAI_BASE_URL=http://localhost:4141/v1 codex         # Codex / Aider
+# Cursor (BYO key only): Settings → Models → Override OpenAI Base URL
+#   → http://localhost:4141/v1   (managed Cursor models can't be redirected)
 ```
 
-Every `POST /v1/messages` passing through gets its **oversized user text and
-tool_result blocks** compressed by the same engine the studio uses (a 120-record
-JSONL tool dump becomes one TOON table). Everything else — your question, the
-model's own words, the system prompt, your API key — passes through untouched.
-Session savings: `curl http://localhost:4141/miserly/stats`.
+Chat requests passing through (`/v1/messages` and `/v1/chat/completions`) get
+their **oversized user text and tool blocks** compressed by the same engine the
+studio uses (a 120-record JSONL tool dump becomes one TOON table). Everything
+else — your question, the model's own words, the system prompt, your API key —
+passes through untouched.
 
-Knobs (env vars): `MISERLY_PORT`, `MISERLY_UPSTREAM`, `MISERLY_GOAL`,
-`MISERLY_BUDGET` (default: each block targets half its own size),
-`MISERLY_MIN_TOKENS` (default 1500), `MISERLY_COMPRESS_SYSTEM` (default off —
-compressing a cached system prompt breaks prompt caching and can cost you
-money), `MISERLY_MARKER` (prepend a small compression note to modified blocks).
+**Turning it on and off — no restarts, nothing breaks.** The proxy always
+passes traffic through; compression is a *live toggle*:
+
+```bash
+curl -X PUT localhost:4141/miserly/config -d '{"enabled":false}'  # bypass
+curl -X PUT localhost:4141/miserly/config -d '{"enabled":true}'   # resume
+curl localhost:4141/miserly/stats                                 # session savings
+curl localhost:4141/miserly/config                                # current settings
+```
+
+Every setting is live-editable the same way and persists to
+`~/.miserly/config.json`, so your preferences survive restarts. Environment
+variables (`MISERLY_PORT`, `MISERLY_UPSTREAM`, `MISERLY_GOAL`, `MISERLY_BUDGET`,
+`MISERLY_MIN_TOKENS`, `MISERLY_COMPRESS_SYSTEM`, `MISERLY_MARKER`,
+`MISERLY_ENABLED`, `MISERLY_CONFIG_PATH`) still work as session-only overrides.
+Defaults worth knowing: each block targets **half its own size** unless you pin
+`budget`; blocks under ~1,500 tokens are never touched; the **system prompt is
+never compressed by default** — compressing a cached system prompt breaks
+provider prompt-caching and can cost you money.
 
 ---
 
