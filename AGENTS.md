@@ -14,7 +14,7 @@ user's machine — browser studio + optional local proxy. Nothing is uploaded.
 | `npx tsc --noEmit` | Typecheck — must be clean |
 | `npm run build` | Production build (typecheck + vite) |
 | `npm run proxy` | Local compression proxy on :4141 (Anthropic + OpenAI shapes) |
-| `npm run setup` | Interactive feature installer (heavy optional packages) |
+| `npm run setup` | Interactive installer: features + optional agent wiring (proxy defaults, aliases) |
 | `npm run generate` | Regenerate feature glue / integration adapters |
 | `npm run uninstall` | Clean removal (`-- --dry-run` to preview) |
 

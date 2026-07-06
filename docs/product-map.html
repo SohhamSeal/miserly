@@ -1532,7 +1532,13 @@ const GUIDE = [
 <i>◆  Which features do you want?</i>
 <i>│  ◼ Accurate tokenizer   (~55 MB — exact OpenAI token counts)</i>
 <i>│  ◻ Document parsing     (~20 MB — PDF &amp; Word upload)</i>
-<i>└  installing gpt-tokenizer … done ✓  (.env updated)</i></pre></div>
+<i>└  installing gpt-tokenizer … done ✓  (.env updated)</i>
+<i>◆  Wire a coding agent through the miserly proxy? (optional)</i>
+<i>│  ◼ Claude Code   ◻ Codex / Aider   ◻ Cursor (your own key)</i>
+<i>└  proxy defaults saved · resilient aliases offered ✓</i></pre></div>
+      <p>The wizard can also do Step 4 for you: pick your coding agent and it saves the proxy
+      defaults and offers health-checking <code>miserly-claude</code>-style aliases that fall back
+      to the real API whenever the proxy isn't running.</p>
       <p>Or skip the terminal entirely: in the studio, <strong>Settings → Tools &amp;
       Features</strong> shows every extra with its size and an <strong>Install</strong> button
       that does the same thing with one click (when running via <code>npm run dev</code>).</p>

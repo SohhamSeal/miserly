@@ -147,6 +147,10 @@ It will:
    (and remove ones you deselected).
 3. Write your choices to `.env`.
 4. Regenerate the feature glue so the app reflects your selection.
+5. **Optionally wire a coding agent** — pick Claude Code / Codex / Cursor
+   (BYO key), choose the proxy's default compression goal, and (if you agree)
+   get resilient `miserly-claude` / `miserly-codex` shell aliases that use the
+   proxy when it's running and fall back to the real API when it isn't.
 
 Then start the app with `npm run dev`.
 
