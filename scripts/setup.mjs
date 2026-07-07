@@ -26,6 +26,8 @@ import {
   writeAliases,
 } from "./integrations.mjs";
 
+const IS_WIN = process.platform === "win32";
+
 const GOALS = [
   { value: "balanced", label: "Balanced", hint: "sensible default — quality-first" },
   { value: "max_compression", label: "Maximum compression", hint: "squeeze hardest" },
@@ -61,7 +63,9 @@ async function integrationsStep() {
     [
       `Saved to ${PROXY_CONFIG_PATH}`,
       "Change any time: studio → Settings → Integrations (live, no restarts),",
-      "or  curl -X PUT localhost:4141/miserly/config -d '{\"enabled\":false}'",
+      IS_WIN
+        ? 'or  curl.exe -X PUT localhost:4141/miserly/config -d "{\\"enabled\\":false}"'
+        : "or  curl -X PUT localhost:4141/miserly/config -d '{\"enabled\":false}'",
     ].join("\n"),
     "Proxy defaults",
   );
@@ -82,18 +86,27 @@ async function integrationsStep() {
       if (!p.isCancel(add) && add) {
         writeAliases(aliasClients, rc);
         wrote = true;
-        p.note(`Added. Open a new terminal (or run: source ${rc}) to use them.`, "Aliases installed");
+        p.note(
+          `Added. Open a new terminal (or run: ${IS_WIN ? `. "${rc}"` : `source ${rc}`}) to use them.`,
+          IS_WIN ? "Launchers installed (PowerShell profile)" : "Aliases installed",
+        );
       }
     }
     if (!wrote) {
       p.note(
         buildAliasBlock(aliasClients) +
-          "\n\n# …or one-off, without aliases:\n" +
+          "\n\n# …or one-off, without launchers:\n" +
           (clients.includes("claude")
-            ? "ANTHROPIC_BASE_URL=http://localhost:4141 claude\n"
+            ? IS_WIN
+              ? "$env:ANTHROPIC_BASE_URL='http://localhost:4141'; claude\n"
+              : "ANTHROPIC_BASE_URL=http://localhost:4141 claude\n"
             : "") +
-          (clients.includes("codex") ? "OPENAI_BASE_URL=http://localhost:4141/v1 codex" : ""),
-        "Copy into your shell profile",
+          (clients.includes("codex")
+            ? IS_WIN
+              ? "$env:OPENAI_BASE_URL='http://localhost:4141/v1'; codex"
+              : "OPENAI_BASE_URL=http://localhost:4141/v1 codex"
+            : ""),
+        IS_WIN ? "Copy into your PowerShell profile ($PROFILE)" : "Copy into your shell profile",
       );
     }
   }
