@@ -15,7 +15,7 @@
 // count_tokens probes and legacy endpoints pass through untouched (compressing
 // a count_tokens body would skew the counts the client budgets with).
 //
-// Wire up:
+// Wire up (PowerShell: $env:ANTHROPIC_BASE_URL='http://localhost:4141'; claude):
 //   Claude Code            ANTHROPIC_BASE_URL=http://localhost:4141 claude
 //   Codex / Aider          OPENAI_BASE_URL=http://localhost:4141/v1
 //   Cursor (BYO key only)  Settings → Models → Override OpenAI Base URL
@@ -76,6 +76,10 @@ if (!process.env.NODE_EXTRA_CA_CERTS && existsSync(CA_BUNDLE)) {
 }
 
 const PORT = Number(process.env.MISERLY_PORT ?? 4141);
+// Every command we print must be paste-able in the user's ACTUAL shell —
+// PowerShell has different env-var and quoting syntax, and lsof/pkill/curl
+// hints are useless there.
+const IS_WIN = process.platform === "win32";
 const CONFIG_PATH =
   process.env.MISERLY_CONFIG_PATH ?? join(homedir(), ".miserly", "config.json");
 
@@ -577,7 +581,7 @@ function warnCertOnce() {
       npm run proxy:trust      # exports your OS-trusted CAs to ~/.miserly/corp-ca.pem
       npm run proxy            # restart — it auto-loads that bundle
 
-  (Requests are passing through UNCHANGED until this is fixed — your agent still works.)
+  (Until fixed, requests to the provider fail with a miserly_tls_error pointing here.)
 `);
 }
 
@@ -796,9 +800,9 @@ server.on("error", (err) => {
     console.error(`
 ✗ Port ${PORT} is already in use — another miserly proxy (or something else) is listening there.
 
-  Find it:            lsof -i :${PORT}
-  Stop a proxy:       pkill -f "scripts/proxy.mjs"
-  Or use a new port:  MISERLY_PORT=4545 npm run proxy
+  Find it:            ${IS_WIN ? `netstat -ano | findstr :${PORT}` : `lsof -i :${PORT}`}
+  Stop it:            ${IS_WIN ? "taskkill /PID <pid from above> /F" : 'pkill -f "scripts/proxy.mjs"'}
+  Or use a new port:  ${IS_WIN ? "$env:MISERLY_PORT=4545; npm run proxy" : "MISERLY_PORT=4545 npm run proxy"}
                       (then update the port in Settings → Integrations and your agent wiring)
 `);
     process.exit(1);
@@ -823,11 +827,23 @@ server.listen(PORT, "127.0.0.1", () => {
    }
    config          ${CONFIG_PATH}
 
-   Claude Code:        ANTHROPIC_BASE_URL=http://localhost:${PORT} claude
-   Codex / Aider:      OPENAI_BASE_URL=http://localhost:${PORT}/v1
+   Claude Code:        ${
+     IS_WIN
+       ? `$env:ANTHROPIC_BASE_URL='http://localhost:${PORT}'; claude`
+       : `ANTHROPIC_BASE_URL=http://localhost:${PORT} claude`
+   }
+   Codex / Aider:      ${
+     IS_WIN
+       ? `$env:OPENAI_BASE_URL='http://localhost:${PORT}/v1'; codex`
+       : `OPENAI_BASE_URL=http://localhost:${PORT}/v1`
+   }
    Cursor (BYO key):   Settings → Models → Override OpenAI Base URL → http://localhost:${PORT}/v1
 
-   Toggle off/on:      curl -X PUT localhost:${PORT}/miserly/config -d '{"enabled":false}'
-   Session savings:    curl localhost:${PORT}/miserly/stats
+   Toggle off/on:      ${
+     IS_WIN
+       ? `curl.exe -X PUT localhost:${PORT}/miserly/config -d "{\"enabled\":false}"`
+       : `curl -X PUT localhost:${PORT}/miserly/config -d '{"enabled":false}'`
+   }
+   Session savings:    ${IS_WIN ? `curl.exe localhost:${PORT}/miserly/stats` : `curl localhost:${PORT}/miserly/stats`}
 `);
 });

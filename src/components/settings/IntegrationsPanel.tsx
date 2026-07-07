@@ -37,6 +37,53 @@ const GOALS: OptimizationGoal[] = [
 
 const POLL_MS = 4000;
 
+type Shell = "bash" | "powershell";
+
+/** Best-guess default shell from the browser's platform; the UI always offers
+ * a manual toggle because people routinely paste into a different terminal
+ * than the one their browser runs on. */
+function detectShell(): Shell {
+  const platform =
+    (navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform ??
+    navigator.platform ??
+    "";
+  return /^win/i.test(platform) ? "powershell" : "bash";
+}
+
+/** The wire-up commands per shell — PowerShell needs $env: assignment syntax. */
+function wireCommand(client: "claude" | "codex", port: number, shell: Shell): string {
+  if (client === "claude") {
+    return shell === "powershell"
+      ? `$env:ANTHROPIC_BASE_URL='http://localhost:${port}'; claude`
+      : `ANTHROPIC_BASE_URL=http://localhost:${port} claude`;
+  }
+  return shell === "powershell"
+    ? `$env:OPENAI_BASE_URL='http://localhost:${port}/v1'; codex`
+    : `OPENAI_BASE_URL=http://localhost:${port}/v1 codex`;
+}
+
+function ShellToggle({ shell, onChange }: { shell: Shell; onChange: (s: Shell) => void }) {
+  return (
+    <div className="inline-flex overflow-hidden rounded-md border border-border text-[11px]">
+      {(["bash", "powershell"] as const).map((opt) => (
+        <button
+          key={opt}
+          type="button"
+          onClick={() => onChange(opt)}
+          className={cn(
+            "px-2 py-0.5 transition-colors",
+            shell === opt
+              ? "bg-accent font-medium text-accent-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {opt === "bash" ? "bash / zsh" : "PowerShell"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function CopyableCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -228,6 +275,7 @@ function OnlineView({
   patchError: string | null;
 }) {
   const pct = stats && stats.before > 0 ? Math.round((1 - stats.after / stats.before) * 100) : 0;
+  const [shell, setShell] = useState<Shell>(detectShell);
   return (
     <div>
       {/* Status + the master toggle */}
@@ -389,7 +437,10 @@ function OnlineView({
 
       {/* Wiring */}
       <div className="mt-5">
-        <h3 className="mb-1 text-sm font-semibold">Wire up a client</h3>
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold">Wire up a client</h3>
+          <ShellToggle shell={shell} onChange={setShell} />
+        </div>
         <p className="mb-3 text-xs text-muted-foreground">
           Point your agent's base URL at the proxy. Turning compression off above never breaks a
           wired client — traffic just passes through.
@@ -397,11 +448,11 @@ function OnlineView({
         <div className="flex flex-col gap-3 text-xs">
           <div>
             <div className="mb-1 font-medium">Claude Code</div>
-            <CopyableCommand command={`ANTHROPIC_BASE_URL=http://localhost:${port} claude`} />
+            <CopyableCommand command={wireCommand("claude", port, shell)} />
           </div>
           <div>
             <div className="mb-1 font-medium">Codex / Aider</div>
-            <CopyableCommand command={`OPENAI_BASE_URL=http://localhost:${port}/v1`} />
+            <CopyableCommand command={wireCommand("codex", port, shell)} />
           </div>
           <div>
             <div className="mb-1 font-medium">Cursor (your own API key only)</div>

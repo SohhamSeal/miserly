@@ -16,11 +16,14 @@
 //   4. Prints what to do by hand: stop processes, delete the folder, clear the
 //      studio's browser storage.
 // -----------------------------------------------------------------------------
-import { existsSync, rmSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { FEATURES } from "./features.config.mjs";
 import { featurePackagesInstalled, npmUninstall } from "./lib.mjs";
+import { BEGIN, detectShellRc, removeAliasBlock } from "./integrations.mjs";
+
+const IS_WIN = process.platform === "win32";
 
 const DRY = process.argv.includes("--dry-run");
 const CONFIG_PATH =
@@ -34,7 +37,7 @@ log(`\n🪙 miserly uninstall${DRY ? " (dry run — nothing will be changed)" : 
 // 1. Un-wiring reminder — the one thing that breaks OTHER tools if forgotten.
 log(`1. Un-wire your clients FIRST (skip any you never wired):
    • Claude Code — stop launching it with ANTHROPIC_BASE_URL=http://localhost:41xx
-     (check your shell aliases/profile, and the "env" block of ~/.claude/settings.json)
+     (check your shell launchers/profile, and the "env" block of ${join(homedir(), ".claude", "settings.json")})
    • Codex / Aider — remove the OPENAI_BASE_URL override
    • Cursor — Settings → Models → clear "Override OpenAI Base URL"
    A client still pointed at the proxy after removal cannot reach its provider.\n`);
@@ -54,7 +57,41 @@ if (heavy.length === 0) {
   }
 }
 
-// 3. Machine-global proxy config.
+// 3. The managed launcher block that `npm run setup` may have written.
+{
+  const candidates = new Set([join(homedir(), ".zshrc"), join(homedir(), ".bashrc")]);
+  if (IS_WIN) {
+    const profile = detectShellRc();
+    if (profile) candidates.add(profile);
+  }
+  let found = false;
+  for (const rc of candidates) {
+    try {
+      if (!existsSync(rc)) continue;
+      const content = readFileSync(rc, "utf8");
+      if (!content.includes(BEGIN)) continue;
+      found = true;
+      act(`remove the miserly launcher block from ${rc}`);
+      if (!DRY) {
+        const cleaned = removeAliasBlock(content);
+        if (cleaned === null) {
+          // BEGIN present but END missing/mangled \u2014 refuse to guess at the
+          // block's extent, and don't claim success we didn't have.
+          log(`   \u2717 block markers look damaged in ${rc} \u2014 remove the miserly launcher block manually`);
+        } else {
+          writeFileSync(rc, cleaned);
+          log("   \u2713 removed");
+        }
+      }
+    } catch {
+      log(`   \u2717 could not update ${rc} \u2014 remove the miserly launcher block manually`);
+    }
+  }
+  if (!found) log("3. Shell launchers: no managed miserly block found \u2014 nothing to remove.");
+  log("");
+}
+
+// 4. Machine-global proxy config.
 if (existsSync(CONFIG_PATH)) {
   act(`delete ${CONFIG_PATH}`);
   if (!DRY) {
@@ -73,17 +110,23 @@ if (existsSync(CONFIG_PATH)) {
   }
   log("");
 } else {
-  log(`3. Proxy config: ${CONFIG_PATH} not found — nothing to remove.\n`);
+  log(`4. Proxy config: ${CONFIG_PATH} not found — nothing to remove.\n`);
 }
 
-// 4. The manual tail.
-log(`4. Finish by hand:
-   • Stop anything still running:  pkill -f "scripts/proxy.mjs" · stop npm run dev
-   • Delete this project folder:   rm -rf ${process.cwd()}
+// 5. The manual tail.
+log(`5. Finish by hand:
+   • Stop anything still running:  ${
+     IS_WIN
+       ? "close the proxy/dev terminals (or: netstat -ano | findstr :4141 \u2192 taskkill /PID <pid> /F)"
+       : 'pkill -f "scripts/proxy.mjs" \u00b7 stop npm run dev'
+   }
+   • Delete this project folder:   ${
+     IS_WIN ? `Remove-Item -Recurse -Force '${process.cwd()}'` : `rm -rf ${process.cwd()}`
+   }
    • Browser leftovers (optional): the studio stores settings in localStorage and
      run history in sessionStorage for its origin — clear site data for
      http://localhost:5173 in your browser to remove them.
 
 Nothing else is installed anywhere on your system — miserly has no global npm
-packages, daemons, or launch agents.${DRY ? "\n\nRun without --dry-run to apply steps 2–3." : ""}
+packages, daemons, or launch agents.${DRY ? "\n\nRun without --dry-run to apply steps 2–4." : ""}
 `);

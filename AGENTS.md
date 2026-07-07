@@ -125,6 +125,7 @@ Notable behaviors people trip over:
    contrast bugs have shipped before) and 375px width.
 3. Proxy changes: start a mock upstream, then
    `MISERLY_UPSTREAM=http://localhost:<mock> MISERLY_CONFIG_PATH=/tmp/x.json npm run proxy`
+   (PowerShell: `$env:MISERLY_UPSTREAM='http://localhost:<mock>'; $env:MISERLY_CONFIG_PATH="$env:TEMP\x.json"; npm run proxy`)
    and assert on what the mock receives. Never point tests at real providers.
 4. Engine measurements: `src/data/samples.ts` + the enterprise dataset are the
    benchmark fixtures; quote reductions with the `~` estimate caveat.

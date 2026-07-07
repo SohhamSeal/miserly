@@ -8,7 +8,10 @@ on:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,3 +22,37 @@ jobs:
       - run: npx tsc --noEmit
       - run: npx vitest run
       - run: npm run build
+
+  # The Windows-only surfaces that unit tests can't reach: the PowerShell
+  # launcher functions must parse and define in a real PowerShell, and the
+  # cert-store exporter must produce actual PEM from the runner's stores.
+  windows-integration:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Generated PowerShell launchers parse and define
+        shell: pwsh
+        run: |
+          node --input-type=module -e "import { buildAliasBlock } from './scripts/integrations.mjs'; process.stdout.write(buildAliasBlock(['claude','codex'], 'win32'))" | Out-File -FilePath launchers.ps1 -Encoding utf8
+          . ./launchers.ps1
+          foreach ($fn in 'miserly-claude', 'miserly-codex', 'miserly-aider') {
+            if (-not (Get-Command $fn -ErrorAction SilentlyContinue)) { throw "$fn not defined" }
+          }
+      - name: Cert-store export produces PEM
+        shell: pwsh
+        run: |
+          $env:MISERLY_CA_CERTS = "$env:RUNNER_TEMP\corp-ca.pem"
+          node scripts/trust-ca.mjs
+          $pem = Get-Content $env:MISERLY_CA_CERTS -Raw
+          if ($pem -notmatch '-----BEGIN CERTIFICATE-----') { throw 'no PEM blocks exported' }
+      - name: Profile detection returns a path
+        shell: pwsh
+        run: |
+          $rc = node --input-type=module -e "import { detectShellRc } from './scripts/integrations.mjs'; process.stdout.write(detectShellRc('win32') ?? '')"
+          if (-not $rc) { throw 'detectShellRc returned nothing on win32' }
+          Write-Host "profile: $rc"
