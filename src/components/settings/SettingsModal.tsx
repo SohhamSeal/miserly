@@ -9,11 +9,13 @@ import {
   Loader2,
   Monitor,
   Moon,
+  Plug,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
   Sun,
 } from "lucide-react";
+import { IntegrationsPanel } from "./IntegrationsPanel";
 import { cn } from "@/lib/utils";
 import { GOAL_LABELS, MODELS, type OptimizationGoal } from "@/engine";
 import { FEATURE_META, isFeatureAvailable, type FeatureMeta } from "@/features";
@@ -50,11 +52,12 @@ const GOALS: OptimizationGoal[] = [
   "fastest",
 ];
 
-type SectionId = "general" | "tools" | "about";
+type SectionId = "general" | "tools" | "integrations" | "about";
 
 const SECTIONS: { id: SectionId; label: string; icon: ReactNode }[] = [
   { id: "general", label: "General", icon: <SlidersHorizontal className="h-4 w-4" /> },
   { id: "tools", label: "Tools & Features", icon: <Boxes className="h-4 w-4" /> },
+  { id: "integrations", label: "Integrations", icon: <Plug className="h-4 w-4" /> },
   { id: "about", label: "About", icon: <Info className="h-4 w-4" /> },
 ];
 
@@ -464,6 +467,7 @@ export function SettingsModal() {
           <div className="flex-1 overflow-y-auto px-6 py-5">
             {section === "general" ? <GeneralPanel /> : null}
             {section === "tools" ? <ToolsPanel /> : null}
+            {section === "integrations" ? <IntegrationsPanel /> : null}
             {section === "about" ? <AboutPanel /> : null}
           </div>
         </div>

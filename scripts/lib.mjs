@@ -139,16 +139,24 @@ export function runStreaming(command, args, onData, opts = {}) {
   });
 }
 
-/** `npm install <pkgs...>` streaming output; resolves to exit code. */
+/**
+ * `npm install --no-save <pkgs...>` streaming output; resolves to exit code.
+ *
+ * --no-save is deliberate: optional heavy features live in node_modules ONLY,
+ * so package.json / package-lock.json stay pristine (lean by default, nothing
+ * to accidentally commit). The whole feature system detects packages by
+ * presence, not by manifest entry. Trade-off: a fresh `npm ci` (or an
+ * occasional pruning `npm install`) removes them — re-run `npm run setup`.
+ */
 export function npmInstall(packages, onData) {
   if (!packages.length) return Promise.resolve(0);
-  return runStreaming("npm", ["install", ...packages], onData);
+  return runStreaming("npm", ["install", "--no-save", ...packages], onData);
 }
 
-/** `npm uninstall <pkgs...>` streaming output; resolves to exit code. */
+/** `npm uninstall --no-save <pkgs...>` — same manifest-pristine rule. */
 export function npmUninstall(packages, onData) {
   if (!packages.length) return Promise.resolve(0);
-  return runStreaming("npm", ["uninstall", ...packages], onData);
+  return runStreaming("npm", ["uninstall", "--no-save", ...packages], onData);
 }
 
 /** Ensure a directory exists. */

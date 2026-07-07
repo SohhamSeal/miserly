@@ -25,6 +25,11 @@ is never uploaded anywhere.
 - ⚙️ **Configurable** — a GitHub-style settings panel + environment-variable
   feature flags + an interactive installer.
 
+> 🗺️ **New here?** Open [`docs/product-map.html`](./docs/product-map.html) in any
+> browser (double-click works — it's fully self-contained) for an interactive tour:
+> how it works, every optimizer, the integrations, and a step-by-step
+> getting-started walkthrough from install to uninstall.
+
 ---
 
 ## Table of contents
@@ -38,6 +43,7 @@ is never uploaded anywhere.
 - [Project structure](#project-structure)
 - [The proxy (`npm run proxy`)](#the-proxy-npm-run-proxy)
 - [Available scripts](#available-scripts)
+- [Uninstalling](#uninstalling)
 - [Tech stack](#tech-stack)
 - [Contributing](#contributing)
 - [License](#license)
@@ -46,7 +52,7 @@ is never uploaded anywhere.
 
 ## Quick start
 
-**Requirements:** [Node.js](https://nodejs.org) 18+ and npm.
+**Requirements:** [Node.js](https://nodejs.org) 20.19+ (or 22.12+) and npm.
 
 ```bash
 # 1. Clone
@@ -141,6 +147,10 @@ It will:
    (and remove ones you deselected).
 3. Write your choices to `.env`.
 4. Regenerate the feature glue so the app reflects your selection.
+5. **Optionally wire a coding agent** — pick Claude Code / Codex / Cursor
+   (BYO key), choose the proxy's default compression goal, and (if you agree)
+   get resilient `miserly-claude` / `miserly-codex` shell aliases that use the
+   proxy when it's running and fall back to the real API when it isn't.
 
 Then start the app with `npm run dev`.
 
@@ -155,6 +165,9 @@ Click the **gear icon** (top-right) to open a GitHub-style settings modal:
   These are runtime preferences saved in your browser.
 - **Tools & Features** — toggle each feature on/off. Heavy features that aren't
   installed show a disabled toggle with an **Install** button.
+- **Integrations** — the local proxy's control panel: live status, compression
+  settings (goal, budget, system-prompt policy), session savings, and the
+  **Open activity monitor** button.
 - **About** — privacy, what's real vs. simulated, version, license.
 
 ### About that in-app **Install** button
@@ -220,6 +233,10 @@ miserly/
 │  ├─ setup.mjs                 # interactive `npm run setup` installer
 │  ├─ install-feature.mjs       # installs one feature (used by the in-app button)
 │  ├─ vite-plugin-installer.mjs # dev-only endpoint behind the Install button
+│  ├─ proxy.mjs                 # local compressing LLM proxy (`npm run proxy`)
+│  ├─ integrations.mjs          # agent-wiring helpers for setup (aliases, proxy config)
+│  ├─ trust-ca.mjs              # `npm run proxy:trust` — corporate-CA export
+│  ├─ uninstall.mjs             # `npm run uninstall` — clean removal
 │  └─ lib.mjs                   # shared helpers (.env, npm, package detection)
 ├─ src/
 │  ├─ engine/                   # tokenizer, classifier, planner, runner, plugins
@@ -250,23 +267,110 @@ architecture as [Headroom](https://github.com/chopratejas/headroom):
 chat client ──► http://localhost:4141 (miserly proxy) ──► api.anthropic.com
 ```
 
+### Wiring Claude Code, step by step
+
+1. **Start the proxy** (leave this terminal running):
+   ```bash
+   npm run proxy
+   ```
+2. **Install the launcher alias** (one time): run `npm run setup`, pick
+   *Claude Code* at the "wire a coding agent?" step, and accept the aliases.
+   This writes a `miserly-claude` alias into your shell profile — a resilient
+   launcher that uses the proxy when it's running and **falls back to the real
+   API when it isn't**, so it always works.
+3. **Reload your shell** (only for terminals that were already open):
+   ```bash
+   source ~/.zshrc      # new terminals pick it up automatically
+   ```
+4. **Launch Claude Code with the alias — every time**:
+   ```bash
+   miserly-claude                  # instead of `claude`
+   miserly-claude --continue       # resume your previous conversation
+   ```
+5. **Verify**: work normally, then open the studio → Settings → Integrations
+   → *Open activity monitor* — your requests appear with their savings. Or:
+   `curl localhost:4141/miserly/stats`.
+
+> **The gotcha this flow prevents:** `ANTHROPIC_BASE_URL=… claude` only wires
+> the terminal you typed it in. Open a new terminal, run plain `claude`, and
+> that session silently talks to Anthropic directly — everything works, but
+> miserly never sees it and the monitor stays empty. The alias makes wiring
+> the default instead of something to remember.
+
+> **Restarts are a clean slate — by design.** The activity history lives only
+> in the proxy's memory (never on disk, for privacy), so restarting the proxy
+> clears the monitor. Savings shown are per-session.
+
+**Other clients:**
+
 ```bash
-npm run proxy
-# then, in another terminal:
-ANTHROPIC_BASE_URL=http://localhost:4141 claude
+OPENAI_BASE_URL=http://localhost:4141/v1 codex         # Codex / Aider
+# (or the miserly-codex / miserly-aider aliases from npm run setup)
+# Cursor (BYO key only): Settings → Models → Override OpenAI Base URL
+#   → http://localhost:4141/v1   (managed Cursor models can't be redirected)
 ```
 
-Every `POST /v1/messages` passing through gets its **oversized user text and
-tool_result blocks** compressed by the same engine the studio uses (a 120-record
-JSONL tool dump becomes one TOON table). Everything else — your question, the
-model's own words, the system prompt, your API key — passes through untouched.
-Session savings: `curl http://localhost:4141/miserly/stats`.
+Chat and Responses-API requests passing through (`/v1/messages`,
+`/v1/chat/completions`, and `/v1/responses` — Codex CLI's default) get their
+**oversized user text and tool blocks** compressed by the same engine the
+studio uses (a 120-record JSONL tool dump becomes one TOON table). Everything
+else passes through untouched: blocks under the size minimum (which includes
+virtually every typed question), the model's own words, the system prompt /
+`instructions` field, injected instruction blocks (Claude Code's
+`<system-reminder>`, Codex's `<user_instructions>` / `<environment_context>`),
+`count_tokens` probes (compressing those would skew the counts your client
+budgets with), and your API key.
 
-Knobs (env vars): `MISERLY_PORT`, `MISERLY_UPSTREAM`, `MISERLY_GOAL`,
-`MISERLY_BUDGET` (default: each block targets half its own size),
-`MISERLY_MIN_TOKENS` (default 1500), `MISERLY_COMPRESS_SYSTEM` (default off —
-compressing a cached system prompt breaks prompt caching and can cost you
-money), `MISERLY_MARKER` (prepend a small compression note to modified blocks).
+**Turning it on and off — no restarts, nothing breaks.** The proxy always
+passes traffic through; compression is a *live toggle*:
+
+```bash
+curl -X PUT localhost:4141/miserly/config -d '{"enabled":false}'  # bypass
+curl -X PUT localhost:4141/miserly/config -d '{"enabled":true}'   # resume
+curl localhost:4141/miserly/stats                                 # session savings
+curl localhost:4141/miserly/config                                # current settings
+```
+
+**Watch what's flowing through it.** Settings → Integrations opens the
+**activity monitor**: a history rail of every request this session (which
+client, which model, the savings), and the selected request displayed as
+**original | compressed side by side** with a per-block metadata bar. Blocks
+that ride along from earlier turns are labelled **“(history)”** — chat APIs
+re-send the whole conversation every message, which is exactly why inline
+compression compounds. A "Hide untouched" toggle collapses pass-through
+requests into markers that say what they hid ("3 untouched · 1 bypassed").
+
+**Every request explains itself.** Blocks the proxy left alone show *why*:
+below the size minimum, an agent instruction block (never compressed), or the
+engine couldn't save ≥3% so the original was kept. Requests that ran while
+compression was off show as **bypassed** (so "off" never looks like "broken"),
+legacy endpoints show as **passed through**, and provider errors, network
+failures, and cancellations get a status badge plus a banner saying what
+happened. Token counts carry a `~` because they're fast local estimates, not
+the provider's exact tokenizer.
+
+By default the monitor stores **metadata only, never your text**. The
+**"Capture content"** switch (in the monitor's own header, or one click from
+any metadata-only entry) keeps the full before/after text of *future* requests
+too — in the proxy's memory only (max 200 requests, gone on restart, never
+written to disk) — with a visible "capturing" badge while it's on.
+
+Every setting is live-editable the same way and persists to
+`~/.miserly/config.json`, so your preferences survive restarts.
+
+> **Corporate network?** If the proxy logs `unable to get local issuer
+> certificate`, your network inspects HTTPS (Cisco Secure Access, Zscaler,
+> Netskope…) and Node doesn't trust the company cert the way your browser does.
+> Run `npm run proxy:trust` once — it exports your OS-trusted roots to
+> `~/.miserly/corp-ca.pem`, which the proxy auto-loads on the next start.
+> Nothing is weakened: it trusts exactly what your OS already trusts. Environment
+variables (`MISERLY_PORT`, `MISERLY_UPSTREAM`, `MISERLY_GOAL`, `MISERLY_BUDGET`,
+`MISERLY_MIN_TOKENS`, `MISERLY_COMPRESS_SYSTEM`, `MISERLY_MARKER`,
+`MISERLY_ENABLED`, `MISERLY_CONFIG_PATH`) still work as session-only overrides.
+Defaults worth knowing: each block targets **half its own size** unless you pin
+`budget`; blocks under ~1,500 tokens are never touched; the **system prompt is
+never compressed by default** — compressing a cached system prompt breaks
+provider prompt-caching and can cost you money.
 
 ---
 
@@ -280,13 +384,46 @@ money), `MISERLY_MARKER` (prepend a small compression note to modified blocks).
 | `npm run setup` | Interactive feature installer |
 | `npm run generate` | Regenerate the feature glue / adapters manually |
 | `npm run typecheck` | Run the TypeScript compiler with no emit |
+| `npm run test` | Run the test suite once (vitest) |
+| `npm run test:watch` | Run the tests in watch mode |
 | `npm run proxy` | Local LLM proxy — compresses requests in-flight on their way to the provider |
+| `npm run proxy:trust` | Trust your corporate TLS-inspection CA so the proxy can reach the provider |
+| `npm run uninstall` | Clean removal: heavy packages + machine-global config (`-- --dry-run` to preview) |
+
+---
+
+## Uninstalling
+
+miserly keeps almost everything inside the project folder — there are **no
+global npm packages, daemons, or launch agents**. A complete removal is:
+
+```bash
+# 0. Preview what will happen (changes nothing):
+npm run uninstall -- --dry-run
+
+# 1. Un-wire any clients pointed at the proxy — do this FIRST.
+#    (shell aliases / ~/.claude/settings.json env block / Cursor's base-URL
+#    override — a client wired to a deleted proxy can't reach its provider)
+
+# 2. Clean up the bits that live outside (or bloat) the folder:
+npm run uninstall
+#    → npm-uninstalls the heavy optional packages (gpt-tokenizer, pdfjs-dist,
+#      mammoth) if installed, and deletes ~/.miserly (the proxy's config)
+
+# 3. Stop anything still running, then delete the folder:
+pkill -f "scripts/proxy.mjs"    # if the proxy is running
+rm -rf <path-to>/miserly
+```
+
+Optional last crumb: the studio keeps its settings in `localStorage` and run
+history in `sessionStorage` for its origin — clear site data for
+`http://localhost:5173` in your browser if you want those gone too.
 
 ---
 
 ## Tech stack
 
-React 18 · TypeScript · Vite · Tailwind CSS · Radix UI primitives · CodeMirror 6 ·
+React 19 · TypeScript · Vite · Tailwind CSS · Radix UI primitives · CodeMirror 6 ·
 Framer Motion · Zustand · `@clack/prompts` (installer).
 
 ---
@@ -298,7 +435,7 @@ Contributions are welcome! A good first contribution is a new optimizer plugin i
 
 1. Fork and clone the repo.
 2. `npm install`.
-3. Make your change; keep `npm run typecheck` and `npm run build` green.
+3. Make your change; keep `npm run typecheck`, `npm run test`, and `npm run build` green.
 4. Open a pull request describing the change.
 
 ---

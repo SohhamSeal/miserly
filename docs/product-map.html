@@ -178,6 +178,58 @@
   }
   .finish b { color: var(--emerald); }
 
+  /* ---------- mock terminal & panel "screenshots" ---------- */
+  .term {
+    margin: 14px 0; border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; background: #0b0b0f;
+  }
+  .term-head {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 12px; background: var(--card); border-bottom: 1px solid var(--border);
+  }
+  .term-head span { width: 10px; height: 10px; border-radius: 50%; }
+  .term-head span:nth-child(1) { background: #e0655f; }
+  .term-head span:nth-child(2) { background: #e0a03f; }
+  .term-head span:nth-child(3) { background: #4fae59; }
+  .term-head em {
+    margin-left: 8px; font-style: normal; font-size: 11px; color: var(--text-faint);
+  }
+  .term-body {
+    margin: 0; padding: 12px 14px; overflow-x: auto; white-space: pre;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px; line-height: 1.65; color: #cfcfd8;
+  }
+  .term-body b { color: var(--emerald); font-weight: 600; }   /* $ prompt */
+  .term-body i { color: var(--text-faint); font-style: normal; } /* output   */
+
+  .mock {
+    margin: 14px 0; border: 1px solid var(--border); border-radius: 12px;
+    background: var(--card); padding: 12px 14px;
+  }
+  .mock-title {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--text-faint); margin-bottom: 9px;
+  }
+  .mock-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; padding: 4px 0;
+  }
+  .mock-row .grow { flex: 1; }
+  .mock-sub { font-size: 11.5px; color: var(--text-faint); margin: 1px 0 4px 18px; }
+  .dotm { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .dotm.on { background: var(--emerald); }
+  .dotm.warn { background: var(--amber); }
+  .mock-switch {
+    width: 30px; height: 17px; border-radius: 999px; flex: none;
+    background: var(--indigo); position: relative;
+  }
+  .mock-switch::after {
+    content: ""; position: absolute; top: 2px; right: 2px;
+    width: 13px; height: 13px; border-radius: 50%; background: #fff;
+  }
+  .mock-switch.off { background: var(--border-bright); }
+  .mock-switch.off::after { right: auto; left: 2px; }
+
   /* ---------- tab bar ---------- */
   .tabs {
     display: flex; gap: 8px;
@@ -375,6 +427,7 @@
 
 <nav class="tabs" role="tablist" aria-label="Product map sections">
   <button class="tabbtn active" id="tabbtn-flow" role="tab" aria-selected="true">🗺️ How it works</button>
+  <button class="tabbtn" id="tabbtn-guide" role="tab" aria-selected="false">🧭 Getting started</button>
   <button class="tabbtn" id="tabbtn-optimizers" role="tab" aria-selected="false">🗜️ The optimizers</button>
   <button class="tabbtn" id="tabbtn-integrations" role="tab" aria-selected="false">🧩 Integrations &amp; services</button>
 </nav>
@@ -382,6 +435,7 @@
 <div class="layout">
   <div class="left" style="min-width:0">
     <main class="flow" id="flow" aria-label="miserly product flow diagram"></main>
+    <main class="flow" id="gflow" aria-label="getting-started user journey" hidden></main>
     <main class="igrid" id="ogrid" aria-label="the compression optimizers" hidden></main>
     <main class="igrid" id="igrid" aria-label="integrated services and features" hidden></main>
   </div>
@@ -444,8 +498,9 @@ const NODES = [
       internal logs, proprietary code, customer conversations.</p>
     `,
     hood: `<p>Run history is kept in the browser's session storage (cleared when the tab closes).
-      The only network call in the entire app is a developer-mode-only "install optional feature"
-      button that talks to <code>localhost</code> — your own machine.</p>`
+      Every network call in the entire app talks to <code>localhost</code> — your own machine:
+      the developer-mode-only "install optional feature" button, and the Settings → Integrations
+      panel driving the local proxy's control API.</p>`
   },
   {
     id: "input", kind: "spine", icon: "📥", step: "Step 1",
@@ -458,8 +513,9 @@ const NODES = [
         transcript, meeting notes, documentation.</li>
         <li><strong>Drag &amp; drop a file</strong> onto the editor. Plain text works out of the box;
         PDF and Word documents work if the optional document-parsing extra is installed.</li>
-        <li><strong>Load a sample</strong> — five realistic built-in examples (noisy incident logs,
-        verbose code, a long runbook, a repetitive chat, a JSON event stream) so you can try the
+        <li><strong>Load a sample</strong> — six realistic built-in examples (noisy incident logs,
+        verbose code, a long runbook, a repetitive chat, a JSON event stream, a big nested
+        enterprise dataset) so you can try the
         whole product in one click without hunting for your own material.</li>
       </ul>
       <p>As you type or paste, a live counter shows characters, words, lines and — most importantly —
@@ -533,7 +589,9 @@ const NODES = [
         can't reach the number, it tells you honestly instead of pretending.</li>
       </ul>
       <p>The plan is fully explained on screen — which tools were chosen, in what order, and
-      <em>why</em> — before and after it runs. No black box.</p>
+      <em>why</em> — before and after it runs. No black box. And when it deliberately goes easy
+      (a small input that already fits the budget), it says that too — with the exact hint for
+      how to squeeze harder.</p>
     `,
     hood: `<p>Budget fitting is closed-loop: the pipeline is executed silently at increasing
       strength levels with a binary search over the aggressiveness floor, measuring real token
@@ -739,6 +797,39 @@ const NODES = [
       so restoring an old run faithfully restores its recipe.</p>`
   },
   {
+    id: "proxy", kind: "branch", parent: "output", icon: "🔌",
+    title: "Inline mode — wire your coding agent",
+    blurb: "",
+    body: `
+      <p>You don't have to paste anything. miserly can sit <strong>between your coding
+      agent and the AI provider</strong> and shrink context automatically, in-flight:</p>
+      <p style="text-align:center" class="mono">your agent → miserly proxy → the model</p>
+      <ul>
+        <li><strong>One command</strong> — <code>npm run proxy</code>, then point your agent at it
+        (Claude Code, Codex, Aider, or Cursor with your own key).</li>
+        <li><strong>It only touches the bulk</strong> — oversized pasted text and tool results.
+        Your questions, the model's replies, your API key and your system prompt pass through
+        untouched.</li>
+        <li><strong>On/off is one switch, no restarts</strong> — traffic always flows; compression
+        is a live toggle. Turning it off never breaks a wired agent.</li>
+        <li><strong>Controlled from the studio</strong> — Settings → Integrations is the proxy's
+        control room: status, savings, and every knob, live.</li>
+      </ul>
+      <div class="example"><div class="exlabel">For example</div>
+      A coding agent reads a 120-record JSON event log with a tool. On its way to the model, that
+      tool result becomes one compact table — about half the tokens — and the agent never knows
+      the difference.</div>
+      <p>Full details on the <strong>Integrations &amp; services</strong> tab of this map.</p>
+    `,
+    hood: `<p>The proxy speaks all three provider shapes — Anthropic /v1/messages, OpenAI
+      /v1/chat/completions, and the OpenAI Responses API (/v1/responses, Codex CLI's default)
+      — and routes each to the right upstream. count_tokens probes pass through untouched:
+      compressing them would skew the counts the client budgets with. Settings persist to
+      ~/.miserly/config.json via a validated localhost-only control API. Cursor's managed
+      models route through Cursor's servers and cannot be intercepted — only its
+      bring-your-own-key mode works.</p>`
+  },
+  {
     id: "settings", kind: "branch", parent: "output", icon: "⚙️",
     title: "Settings & optional extras",
     blurb: "",
@@ -774,6 +865,8 @@ const NODES = [
         <li><strong>AI builders</strong> trimming RAG bundles, tool outputs and conversation history
         in their apps and agents.</li>
         <li><strong>Prompt writers</strong> auditing where their token budget actually goes.</li>
+        <li><strong>Coding-agent users</strong> — wire Claude Code, Codex or Cursor (BYO key)
+        through the built-in proxy and oversized tool results shrink automatically, in-flight.</li>
       </ul>
       <p><strong>Next</strong> on the roadmap: a command-line version and an MCP server (so AI
       agents can call miserly automatically), a stage-by-stage diff viewer, pinned "never touch
@@ -794,6 +887,8 @@ const NODES = [
 const GROUPS = [
   { id: "addons", title: "Optional add-ons · bigger downloads, off by default",
     note: "miserly installs lean. These two extras are real downloads, so YOU decide whether they're worth the disk space — everything works without them, just less precisely." },
+  { id: "agents", title: "For coding agents · the inline proxy",
+    note: "Skip the pasting: wire your coding agent straight through miserly and big tool results shrink on their way to the model — the same engine, inline." },
   { id: "builtin", title: "Built-in features · on by default, toggle any time",
     note: "No downloads — these ship with the app and can be flipped on/off in Settings (or with an environment flag)." },
   { id: "models", title: "Supported AI models · the cost catalog",
@@ -919,6 +1014,86 @@ const INTEGRATIONS = [
     hood: ``
   },
 
+  /* ---------- coding-agent integration ---------- */
+  {
+    id: "svc-proxy", kind: "card", tab: "integrations", group: "agents",
+    icon: "🔌", title: "The inline proxy",
+    chips: [["on", "npm run proxy"], ["price", "Claude Code · Codex · Cursor (BYO)"], ["on", "live on/off — no restarts"]],
+    crumb: "Coding-agent integration · scripts/proxy.mjs",
+    body: `
+      <p>A tiny local server that sits between your coding agent and the AI provider. Every
+      request passes through it; blocks that are <strong>big enough to matter</strong> (pasted
+      dumps and tool results over ~1,500 tokens) get compressed by the same engine the studio
+      uses — a 120-record JSON event stream becomes one table at roughly half the tokens.</p>
+      <ul>
+        <li><strong>Start it:</strong> <code>npm run proxy</code></li>
+        <li><strong>Claude Code:</strong> <code>ANTHROPIC_BASE_URL=http://localhost:4141 claude</code></li>
+        <li><strong>Codex / Aider:</strong> <code>OPENAI_BASE_URL=http://localhost:4141/v1</code>
+        — both the classic chat API and Codex's Responses API
+        (<span class="mono">/v1/responses</span>) are compressed.</li>
+        <li><strong>Cursor:</strong> only with your own API key — Settings → Models → Override
+        OpenAI Base URL. Cursor's managed models route through Cursor's servers and cannot be
+        redirected.</li>
+      </ul>
+      <p><strong>Never touched:</strong> your questions, the model's own words, your API key,
+      injected instruction blocks (Claude Code's <span class="mono">&lt;system-reminder&gt;</span>
+      notes, Codex's <span class="mono">&lt;user_instructions&gt;</span> /
+      <span class="mono">&lt;environment_context&gt;</span>), <span class="mono">count_tokens</span> probes (compressing
+      those would skew the very counts your client budgets with), and — by default — your system
+      prompt / <span class="mono">instructions</span> field, because compressing a
+      <em>cached</em> system prompt breaks provider prompt-caching and can cost more than it
+      saves.</p>
+      <div class="example"><div class="exlabel">The off switch</div>
+      Traffic always flows; compression is a live toggle. Turn it off and requests pass through
+      byte-for-byte — a wired agent never breaks, and no restarts are ever needed. Settings
+      persist to <span class="mono">~/.miserly/config.json</span>.</div>
+      <p>Session savings any time: <code>curl localhost:4141/miserly/stats</code>.</p>
+    `,
+    hood: `<p>The proxy loads the engine through Vite's SSR module loader, so it runs the exact
+      code the studio runs — no separate build. Per-block budget defaults to half the block's own
+      size (demanding enough that the closed-loop budget fit engages). A validated, localhost-only
+      control API (GET/PUT /miserly/config) drives it; foreign-origin writes are rejected.</p>`
+  },
+  {
+    id: "svc-proxy-panel", kind: "card", tab: "integrations", group: "agents",
+    icon: "🎛️", title: "Integrations control panel",
+    chips: [["on", "in the studio Settings"], ["on", "live status + savings"]],
+    crumb: "Coding-agent integration · Settings → Integrations",
+    body: `
+      <p>The proxy's control room lives inside the studio — <strong>Settings →
+      Integrations</strong> — so turning things on and off never means a terminal:</p>
+      <ul>
+        <li><strong>Status at a glance</strong> — a live dot: green (compressing), amber
+        (bypassing), grey (not running), plus this session's request count and tokens saved.</li>
+        <li><strong>The master toggle</strong> — flips the actual proxy instantly; the setting
+        persists across restarts.</li>
+        <li><strong>Every knob, live</strong> — goal, per-block budget, minimum block size,
+        system-prompt compression (with the cache-cost warning), and the compression marker.</li>
+        <li><strong>Wire-up helpers</strong> — copy-paste commands for each client.</li>
+        <li><strong>Activity monitor</strong> — a full-screen master-detail view of every
+        request this session: a history rail on the left, and the selected request opened as
+        <em>original alongside compressed</em> with a per-block metadata bar. Metadata only by
+        default; an explicit “capture request content” toggle (with a visible badge) keeps full
+        before/after text in memory so you can read exactly what was compressed — never written
+        to disk, gone on restart.</li>
+        <li><strong>Every request explains itself</strong> — blocks the proxy left alone say
+        why (below the minimum, an instruction block, or the engine couldn't save ≥3%);
+        requests sent while compression was off show as <em>bypassed</em>; legacy generation
+        endpoints the proxy forwards without compressing show as <em>passed through</em>; a
+        “Hide untouched” switch collapses uncompressed rows into markers that say what they
+        hid; provider errors and
+        cancellations get a status badge and a banner clarifying it's between your client and
+        the provider. Token counts carry a <span class="mono">~</span> because they're fast
+        estimates.</li>
+      </ul>
+      <p>When the proxy isn't running, the panel doesn't break — it shows the start command and
+      reconnects by itself the moment the proxy comes up.</p>
+    `,
+    hood: `<p>The panel polls the proxy's localhost control API every 4 seconds while open,
+      applies changes optimistically, and reconciles with the proxy's validated response. The
+      port is editable and remembered by the studio.</p>`
+  },
+
   /* ---------- built-in toggles ---------- */
   {
     id: "svc-animations", kind: "card", tab: "integrations", group: "builtin",
@@ -993,7 +1168,7 @@ const INTEGRATIONS = [
     chips: [["on", "ON by default"], ["on", "no download"]],
     crumb: "Built-in feature · env flag: VITE_FEATURE_SAMPLE_DOCUMENTS",
     body: `
-      <p>Five realistic, one-click examples so anyone can experience the whole product in thirty
+      <p>Six realistic, one-click examples so anyone can experience the whole product in thirty
       seconds without hunting for material:</p>
       <ul>
         <li><strong>Incident logs + stack trace</strong> — noisy service logs with repetition.</li>
@@ -1001,6 +1176,8 @@ const INTEGRATIONS = [
         <li><strong>Knowledge base / runbook</strong> — a long Markdown document.</li>
         <li><strong>Chat history</strong> — a repetitive multi-turn conversation.</li>
         <li><strong>Kubernetes events (JSON)</strong> — a stream of near-duplicate data records.</li>
+        <li><strong>Enterprise dataset (big JSON)</strong> — a large nested commerce dataset whose
+        record arrays become TOON tables (try it with Maximum compression).</li>
       </ul>
       <p>Each one is chosen to show off a different part of the engine. Teams embedding miserly
       can switch them off for a cleaner UI.</p>
@@ -1031,6 +1208,10 @@ const INTEGRATIONS = [
       </ul>
       <p>Whatever door you use, the same rule holds: features you don't have simply fall back
       gracefully. The app never breaks for lacking an extra.</p>
+      <p>Leaving is just as clean: <code>npm run uninstall</code> removes the heavy packages and
+      the proxy's machine-global config, reminds you to un-wire any clients first, and tells you
+      exactly what's left to delete by hand (<code>-- --dry-run</code> previews it). miserly
+      installs no global packages, daemons or launch agents.</p>
     `,
     hood: `<p>The in-app install endpoint only exists in dev mode, only accepts requests from
       localhost origins, validates the feature name against the catalog whitelist, and serializes
@@ -1108,7 +1289,7 @@ const OPTIMIZER_DATA = [
     steps: [
       "Normalize noise — long hex IDs, UUIDs and timestamps get shortened to consistent stand-ins.",
       "Compact JSON — pretty-printed blocks collapse onto single lines (skipped entirely if the block holds a number too precise to round-trip safely, like a 19-digit ID).",
-      "Fold repeats — consecutive duplicate lines become one line with a “⟲ ×N” marker.",
+      "Fold repeats — consecutive duplicate lines become one line with a “⟲ ×N” marker (including identical free-standing JSON records in log streams).",
       "Trim stack traces — keeps the top frames (6 normally, 3 when the slider is above 70%) and notes how many were omitted.",
       "Squeeze whitespace.",
     ],
@@ -1123,6 +1304,7 @@ const OPTIMIZER_DATA = [
     steps: [
       "Parse each JSON block (skipped entirely if it holds a number too precise to round-trip safely).",
       "Encode it BOTH ways — TOON (unquoted keys, tables for record arrays) and plain minified JSON.",
+      "Fold JSONL streams — a run of one-record-per-line JSON (log/event exports) is gathered into a single table too.",
       "The calculator: measure the token count of each encoding and ship whichever is smaller — per block, and again per array (table form vs list form). Never assumed, always measured.",
       "Fold duplicate lines across the whole document, collapse stack traces to their top 3 frames, squeeze whitespace.",
     ],
@@ -1341,13 +1523,235 @@ OPTIMIZERS.push(
 
 NODES.push(...OPTIMIZERS);
 
+/* =====================================================================
+   TAB — Getting started: the user journey, install → daily use → uninstall.
+   Spine nodes with tab:"guide" render as a second vertical flow.
+   ===================================================================== */
+const GUIDE = [
+  {
+    id: "g-install", kind: "spine", tab: "guide", icon: "📦", step: "Step 1",
+    title: "Install it",
+    blurb: "Clone, install, run — under two minutes, no API keys.",
+    body: `
+      <p>You need <strong>Node.js 18+</strong> and npm. That's the whole requirements list —
+      no accounts, no API keys, nothing uploaded anywhere.</p>
+      <div class="term"><div class="term-head"><span></span><span></span><span></span><em>Terminal</em></div><pre class="term-body"><b>$</b> git clone &lt;your-fork-url&gt; miserly
+<b>$</b> cd miserly
+<b>$</b> npm install          <i># lean by default — no big downloads</i>
+<b>$</b> npm run dev
+<i>  VITE ready  ➜  Local: http://localhost:5173/</i></pre></div>
+      <p>Open that URL and the studio is running. The default install deliberately skips the two
+      heavy optional packages (exact tokenizer, PDF/Word parsing) — everything works without
+      them, with clearly-labeled estimates instead of exact counts.</p>
+    `,
+    hood: `<p>npm's install step also runs the feature generator: it writes the small glue files
+      that tell the app which optional packages exist, so the build never breaks over a missing
+      extra.</p>`
+  },
+  {
+    id: "g-extras", kind: "branch", tab: "guide", parent: "g-install", icon: "⚡",
+    title: "Optional extras — now or later",
+    blurb: "",
+    body: `
+      <p>Want exact token counts or PDF/Word drag-and-drop? Two ways, whenever you like:</p>
+      <div class="term"><div class="term-head"><span></span><span></span><span></span><em>Terminal — the wizard</em></div><pre class="term-body"><b>$</b> npm run setup
+<i>◆  Which features do you want?</i>
+<i>│  ◼ Accurate tokenizer   (~55 MB — exact OpenAI token counts)</i>
+<i>│  ◻ Document parsing     (~20 MB — PDF &amp; Word upload)</i>
+<i>└  installing gpt-tokenizer … done ✓  (.env updated)</i>
+<i>◆  Wire a coding agent through the miserly proxy? (optional)</i>
+<i>│  ◼ Claude Code   ◻ Codex / Aider   ◻ Cursor (your own key)</i>
+<i>└  proxy defaults saved · resilient aliases offered ✓</i></pre></div>
+      <p>The wizard can also do Step 4 for you: pick your coding agent and it saves the proxy
+      defaults and offers health-checking <code>miserly-claude</code>-style aliases that fall back
+      to the real API whenever the proxy isn't running.</p>
+      <p>Or skip the terminal entirely: in the studio, <strong>Settings → Tools &amp;
+      Features</strong> shows every extra with its size and an <strong>Install</strong> button
+      that does the same thing with one click (when running via <code>npm run dev</code>).</p>
+      <p>Either way the choice is reversible, and features you don't install simply fall back
+      gracefully.</p>
+    `,
+    hood: ``
+  },
+  {
+    id: "g-firstrun", kind: "spine", tab: "guide", icon: "🧪", step: "Step 2",
+    title: "Take it for a spin",
+    blurb: "One sample, one click, one report.",
+    body: `
+      <p>Fastest way to see what it does:</p>
+      <ul>
+        <li>Click <strong>Load sample → Enterprise dataset (big JSON)</strong>.</li>
+        <li>Set the goal to <strong>Maximum compression</strong> (the default Balanced goal
+        deliberately goes easy when a small input already fits the budget — and tells you so in
+        the plan).</li>
+        <li>Hit <strong>Optimize context</strong>. Watch the pipeline run — or hit
+        <strong>Skip</strong> to jump straight to the result.</li>
+      </ul>
+      <p>You'll see the record arrays re-encoded as TOON tables in the output, and the report
+      shows tokens before/after, dollar cost per model, a quality verdict, and exactly what each
+      stage did. Try the other samples — each shows off a different specialist.</p>
+    `,
+    hood: ``
+  },
+  {
+    id: "g-settings", kind: "spine", tab: "guide", icon: "⚙️", step: "Step 3",
+    title: "Make it yours",
+    blurb: "The gear icon is the front door to every preference.",
+    body: `
+      <p>Click the <strong>gear icon</strong> (top-right) — four tabs:</p>
+      <ul>
+        <li><strong>General</strong> — theme, reduced motion, default goal &amp; model, the
+        first-run guide.</li>
+        <li><strong>Tools &amp; Features</strong> — every feature with an on/off switch; heavy
+        ones show their size and an Install button.</li>
+        <li><strong>Integrations</strong> — the proxy's control room (Step 4 makes this one
+        matter).</li>
+        <li><strong>About</strong> — what's real, what's estimated, privacy.</li>
+      </ul>
+      <p>Studio preferences save to your browser instantly. Proxy settings (Step 4) live in
+      <span class="mono">~/.miserly/config.json</span> on your machine — so they hold across
+      restarts and apply to every project.</p>
+    `,
+    hood: ``
+  },
+  {
+    id: "g-config-ways", kind: "branch", tab: "guide", parent: "g-settings", icon: "🧰",
+    title: "Three doors to the same settings",
+    blurb: "",
+    body: `
+      <p>Configuration has three entrances — use whichever fits the moment:</p>
+      <ul>
+        <li><strong>The wizard</strong> (<code>npm run setup</code>) — best at install time:
+        multi-select features, it installs packages and writes <code>.env</code> for you.</li>
+        <li><strong>The <code>.env</code> file</strong> — best for teams and dotfile people:
+        <code>VITE_FEATURE_*</code> flags set each feature's default (copy
+        <code>.env.example</code>).</li>
+        <li><strong>The Settings panel</strong> — best day-to-day: live toggles, no restart.</li>
+      </ul>
+      <p>They layer sensibly: build-time flags decide what's compiled in; runtime toggles win for
+      the session. The proxy adds a fourth door for scripts —
+      <code>curl -X PUT localhost:4141/miserly/config</code> — which the Integrations panel uses
+      under the hood.</p>
+    `,
+    hood: ``
+  },
+  {
+    id: "g-wire", kind: "spine", tab: "guide", icon: "🔌", step: "Step 4",
+    title: "Wire your coding agent",
+    blurb: "Two terminals, one env var — then forget it's there.",
+    body: `
+      <p>Terminal one — start the proxy (leave it running):</p>
+      <div class="term"><div class="term-head"><span></span><span></span><span></span><em>Terminal 1 — proxy</em></div><pre class="term-body"><b>$</b> npm run proxy
+<i>🪙 miserly proxy listening on http://localhost:4141</i>
+<i>   compression   ON · goal balanced · budget half of each block</i>
+<i>   system prompt untouched (protects prompt caching)</i></pre></div>
+      <p>Terminal two — launch your agent pointed at it:</p>
+      <div class="term"><div class="term-head"><span></span><span></span><span></span><em>Terminal 2 — your agent</em></div><pre class="term-body"><b>$</b> ANTHROPIC_BASE_URL=http://localhost:4141 claude   <i># Claude Code</i>
+<i># or:</i>
+<b>$</b> OPENAI_BASE_URL=http://localhost:4141/v1 codex    <i># Codex / Aider</i></pre></div>
+      <p><strong>Cursor</strong> (your own API key only): Settings → Models → “Override OpenAI
+      Base URL” → <span class="mono">http://localhost:4141/v1</span>. Cursor's managed models
+      can't be redirected — that's a Cursor limitation, not a setting.</p>
+      <p>Then just work. When the agent reads a big log or tool result, you'll see the proxy
+      quietly earn its keep in terminal one:</p>
+      <div class="term"><div class="term-head"><span></span><span></span><span></span><em>Terminal 1 — while you work</em></div><pre class="term-body"><i>⇒ compressed 1 block(s): tool_result ~4,370→~2,039</i>
+<i>  · session total −53% (~2,331 tokens saved)</i></pre></div>
+    `,
+    hood: `<p>Only oversized user text and tool results are touched (default: blocks over ~1,500
+      tokens, squeezed toward half their size). Questions, the model's replies, API keys and the
+      system prompt pass through untouched.</p>`
+  },
+  {
+    id: "g-daily", kind: "spine", tab: "guide", icon: "🔁", step: "Step 5",
+    title: "The daily loop — agent & settings, together",
+    blurb: "Change settings mid-session; the very next message uses them.",
+    body: `
+      <p>Here's the rhythm once you're set up. Say you're deep in a Claude Code session and the
+      compression feels too aggressive for today's task:</p>
+      <ul>
+        <li><strong>1.</strong> Keep Claude Code open — don't touch it.</li>
+        <li><strong>2.</strong> In the studio (http://localhost:5173), open <strong>Settings →
+        Integrations</strong>:</li>
+      </ul>
+      <div class="mock"><div class="mock-title">Settings → Integrations</div>
+        <div class="mock-row"><span class="dotm on"></span><span class="grow"><strong>Running on :4141</strong> — compressing</span><span class="mock-switch"></span></div>
+        <div class="mock-sub">session: 14 compressed · 38 block(s) · ~38,200 tokens saved (−41%)</div>
+        <div class="mock-row"><span class="grow">Goal</span><span style="color:var(--text-muted)">Balanced → <strong>Highest quality</strong></span></div>
+      </div>
+      <ul>
+        <li><strong>3.</strong> Switch the goal — or flip the master toggle off entirely. The
+        change hits the proxy <em>instantly</em> and persists.</li>
+        <li><strong>4.</strong> Go straight back to Claude Code and keep typing. The very next
+        message uses the new setting. <strong>No restarts, ever</strong> — turning compression
+        off just means requests pass through untouched; a wired agent never breaks.</li>
+        <li><strong>5.</strong> Glance at the savings ticker in the panel (or
+        <code>curl localhost:4141/miserly/stats</code>) whenever you're curious what it's
+        earned you.</li>
+      </ul>
+    `,
+    hood: ``
+  },
+  {
+    id: "g-trouble", kind: "branch", tab: "guide", parent: "g-daily", icon: "🩺",
+    title: "If something looks off",
+    blurb: "",
+    body: `
+      <p>The three situations you might hit, and the one-liner for each:</p>
+      <ul>
+        <li><strong>Agent can't connect at all</strong> — the proxy isn't running but the agent is
+        still pointed at it. Either start the proxy (<code>npm run proxy</code>) or relaunch the
+        agent without the base-URL override. Quick check:
+        <code>curl localhost:4141/miserly/health</code>.</li>
+        <li><strong>“Is miserly causing this weird answer?”</strong> — flip the master toggle to
+        <em>bypass</em> in Settings → Integrations and re-ask. Bypass is byte-for-byte
+        passthrough, so if the weirdness survives, it isn't miserly.</li>
+        <li><strong>Port 4141 is taken</strong> — start with <code>MISERLY_PORT=4545 npm run
+        proxy</code>, update the port in the Integrations panel, and re-wire the agent to the new
+        port.</li>
+        <li><strong>“unable to get local issuer certificate”</strong> — your work network inspects
+        HTTPS and Node doesn't trust the company certificate the way your browser does. Run
+        <code>npm run proxy:trust</code> once (it exports your OS-trusted roots), then restart the
+        proxy — it auto-loads them. While unfixed, the proxy can't reach the provider at all — requests fail
+        with a clear <code>miserly_tls_error</code> pointing at this exact fix.</li>
+      </ul>
+      <p>And remember the studio always works on its own — the proxy is an add-on, never a
+      dependency.</p>
+    `,
+    hood: ``
+  },
+  {
+    id: "g-uninstall", kind: "spine", tab: "guide", icon: "🧹", step: "Step 6",
+    title: "Leave cleanly",
+    blurb: "Un-wire first, then two commands.",
+    body: `
+      <p>miserly installs <strong>no global packages, daemons or launch agents</strong> — so
+      removal is short. The order matters though: <strong>un-wire your agents first</strong> (an
+      agent still pointed at a deleted proxy can't reach its provider at all). Remove the
+      base-URL override from your shell/alias, <span class="mono">~/.claude/settings.json</span>,
+      or Cursor's settings.</p>
+      <div class="term"><div class="term-head"><span></span><span></span><span></span><em>Terminal</em></div><pre class="term-body"><b>$</b> npm run uninstall -- --dry-run   <i># preview — changes nothing</i>
+<b>$</b> npm run uninstall
+<i>1. Un-wire your clients FIRST … ✓ (you did this)</i>
+<i>2. Heavy optional packages: removed gpt-tokenizer ✓</i>
+<i>3. Proxy config: deleted ~/.miserly ✓</i>
+<b>$</b> rm -rf ~/path/to/miserly</pre></div>
+      <p>Optional last crumb: the studio kept its preferences in your browser — clear site data
+      for <span class="mono">http://localhost:5173</span> and every trace is gone.</p>
+    `,
+    hood: ``
+  },
+];
+NODES.push(...GUIDE);
+
 /* ===================== rendering ===================== */
 const flowEl = document.getElementById("flow");
 const igridEl = document.getElementById("igrid");
 const ogridEl = document.getElementById("ogrid");
-const tabViews = { flow: flowEl, optimizers: ogridEl, integrations: igridEl };
+const gflowEl = document.getElementById("gflow");
+const tabViews = { flow: flowEl, guide: gflowEl, optimizers: ogridEl, integrations: igridEl };
 const tabBtns = {
   flow: document.getElementById("tabbtn-flow"),
+  guide: document.getElementById("tabbtn-guide"),
   optimizers: document.getElementById("tabbtn-optimizers"),
   integrations: document.getElementById("tabbtn-integrations"),
 };
@@ -1358,10 +1762,10 @@ const btnPrev = document.getElementById("btnPrev");
 const btnNext = document.getElementById("btnNext");
 const panelClose = document.getElementById("panelClose");
 
-const spines = NODES.filter(n => n.kind === "spine");
 const byId = Object.fromEntries(NODES.map(n => [n.id, n]));
 
-function render() {
+function renderFlow(container, tab, finishHTML) {
+  const spines = NODES.filter(n => n.kind === "spine" && (n.tab || "flow") === tab);
   const frag = document.createDocumentFragment();
   spines.forEach((node, i) => {
     const stage = document.createElement("div");
@@ -1403,9 +1807,9 @@ function render() {
 
   const fin = document.createElement("div");
   fin.className = "finish";
-  fin.innerHTML = "🪙 Smaller text · same meaning · <b>less money spent</b> — that's miserly.";
+  fin.innerHTML = finishHTML;
   frag.appendChild(fin);
-  flowEl.appendChild(frag);
+  container.appendChild(frag);
 }
 
 function renderCards(groups, container) {
@@ -1504,10 +1908,12 @@ function select(id, scrollPanel = true) {
 panelClose.addEventListener("click", () => panelEl.classList.remove("open"));
 
 tabBtns.flow.addEventListener("click", () => select("problem"));
+tabBtns.guide.addEventListener("click", () => select("g-install"));
 tabBtns.optimizers.addEventListener("click", () => select("opt-headroom"));
 tabBtns.integrations.addEventListener("click", () => select("svc-tokenizer"));
 
-render();
+renderFlow(flowEl, "flow", "🪙 Smaller text · same meaning · <b>less money spent</b> — that's miserly.");
+renderFlow(gflowEl, "guide", "📦 install · 🧪 try · ⚙️ tune · 🔌 wire · 🧹 leave cleanly — <b>you're in control the whole way</b>.");
 renderCards(OPT_GROUPS, ogridEl);
 renderCards(GROUPS, igridEl);
 const initial = location.hash ? location.hash.slice(1) : "problem";
