@@ -1648,7 +1648,9 @@ const GUIDE = [
       <p>Terminal two — launch your agent pointed at it:</p>
       <div class="term"><div class="term-head"><span></span><span></span><span></span><em>Terminal 2 — your agent</em></div><pre class="term-body"><b>$</b> ANTHROPIC_BASE_URL=http://localhost:4141 claude   <i># Claude Code</i>
 <i># or:</i>
-<b>$</b> OPENAI_BASE_URL=http://localhost:4141/v1 codex    <i># Codex / Aider</i></pre></div>
+<b>$</b> OPENAI_BASE_URL=http://localhost:4141/v1 codex    <i># Codex / Aider</i>
+<i># Windows PowerShell:</i>
+<b>&gt;</b> $env:ANTHROPIC_BASE_URL='http://localhost:4141'; claude</pre></div>
       <p><strong>Cursor</strong> (your own API key only): Settings → Models → “Override OpenAI
       Base URL” → <span class="mono">http://localhost:4141/v1</span>. Cursor's managed models
       can't be redirected — that's a Cursor limitation, not a setting.</p>
@@ -1706,8 +1708,8 @@ const GUIDE = [
         <em>bypass</em> in Settings → Integrations and re-ask. Bypass is byte-for-byte
         passthrough, so if the weirdness survives, it isn't miserly.</li>
         <li><strong>Port 4141 is taken</strong> — start with <code>MISERLY_PORT=4545 npm run
-        proxy</code>, update the port in the Integrations panel, and re-wire the agent to the new
-        port.</li>
+        proxy</code> (PowerShell: <code>$env:MISERLY_PORT=4545; npm run proxy</code>), update the
+        port in the Integrations panel, and re-wire the agent to the new port.</li>
         <li><strong>“unable to get local issuer certificate”</strong> — your work network inspects
         HTTPS and Node doesn't trust the company certificate the way your browser does. Run
         <code>npm run proxy:trust</code> once (it exports your OS-trusted roots), then restart the

@@ -52,7 +52,7 @@ real provider (Anthropic / OpenAI)
 - It sees the **whole payload**, so it can compress *any* content — built-in `Read`/`Shell`/`Grep` output included — with no "MCP-only" restriction.
 - It's **editor-agnostic** (same proxy works across agents).
 - The "hooks can't rewrite the prompt" limit doesn't apply, because this isn't a hook.
-- Wiring: `ANTHROPIC_BASE_URL=http://localhost:4141 claude` (Claude Code), `OPENAI_BASE_URL=http://localhost:4141/v1` (Codex/Aider), or Cursor's *Override OpenAI Base URL* (BYO key only — see §1 caveat).
+- Wiring: `ANTHROPIC_BASE_URL=http://localhost:4141 claude` (Claude Code), `OPENAI_BASE_URL=http://localhost:4141/v1` (Codex/Aider), or Cursor's *Override OpenAI Base URL* (BYO key only — see §1 caveat). PowerShell: `$env:ANTHROPIC_BASE_URL='http://localhost:4141'; claude`.
 
 ### 3.2 MCP server (secondary, opt-in)
 

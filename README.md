@@ -273,14 +273,18 @@ chat client ──► http://localhost:4141 (miserly proxy) ──► api.anthro
    ```bash
    npm run proxy
    ```
-2. **Install the launcher alias** (one time): run `npm run setup`, pick
-   *Claude Code* at the "wire a coding agent?" step, and accept the aliases.
-   This writes a `miserly-claude` alias into your shell profile — a resilient
-   launcher that uses the proxy when it's running and **falls back to the real
-   API when it isn't**, so it always works.
+2. **Install the launcher** (one time): run `npm run setup`, pick
+   *Claude Code* at the "wire a coding agent?" step, and accept the launchers.
+   This writes a `miserly-claude` launcher into your shell profile (`.zshrc` /
+   `.bashrc`; on Windows, a PowerShell function in `$PROFILE`) — resilient:
+   it uses the proxy when it's running and **falls back to the real API when
+   it isn't**, so it always works.
 3. **Reload your shell** (only for terminals that were already open):
    ```bash
-   source ~/.zshrc      # new terminals pick it up automatically
+   source ~/.zshrc      # macOS / Linux — new terminals pick it up automatically
+   ```
+   ```powershell
+   . $PROFILE           # Windows PowerShell
    ```
 4. **Launch Claude Code with the alias — every time**:
    ```bash
@@ -305,9 +309,15 @@ chat client ──► http://localhost:4141 (miserly proxy) ──► api.anthro
 
 ```bash
 OPENAI_BASE_URL=http://localhost:4141/v1 codex         # Codex / Aider
-# (or the miserly-codex / miserly-aider aliases from npm run setup)
+# (or the miserly-codex / miserly-aider launchers from npm run setup)
 # Cursor (BYO key only): Settings → Models → Override OpenAI Base URL
 #   → http://localhost:4141/v1   (managed Cursor models can't be redirected)
+```
+
+```powershell
+# Windows PowerShell equivalents
+$env:ANTHROPIC_BASE_URL='http://localhost:4141'; claude
+$env:OPENAI_BASE_URL='http://localhost:4141/v1'; codex
 ```
 
 Chat and Responses-API requests passing through (`/v1/messages`,
@@ -408,11 +418,19 @@ npm run uninstall -- --dry-run
 # 2. Clean up the bits that live outside (or bloat) the folder:
 npm run uninstall
 #    → npm-uninstalls the heavy optional packages (gpt-tokenizer, pdfjs-dist,
-#      mammoth) if installed, and deletes ~/.miserly (the proxy's config)
+#      mammoth) if installed, removes the managed launcher block from your
+#      shell profile (.zshrc / .bashrc / PowerShell $PROFILE), and deletes
+#      ~/.miserly (the proxy's config)
 
 # 3. Stop anything still running, then delete the folder:
 pkill -f "scripts/proxy.mjs"    # if the proxy is running
 rm -rf <path-to>/miserly
+```
+
+```powershell
+# Windows: step 3 equivalents
+netstat -ano | findstr :4141    # find the proxy's PID, then: taskkill /PID <pid> /F
+Remove-Item -Recurse -Force <path-to>\miserly
 ```
 
 Optional last crumb: the studio keeps its settings in `localStorage` and run
