@@ -74,8 +74,14 @@ if (heavy.length === 0) {
       act(`remove the miserly launcher block from ${rc}`);
       if (!DRY) {
         const cleaned = removeAliasBlock(content);
-        if (cleaned !== null) writeFileSync(rc, cleaned);
-        log("   \u2713 removed");
+        if (cleaned === null) {
+          // BEGIN present but END missing/mangled \u2014 refuse to guess at the
+          // block's extent, and don't claim success we didn't have.
+          log(`   \u2717 block markers look damaged in ${rc} \u2014 remove the miserly launcher block manually`);
+        } else {
+          writeFileSync(rc, cleaned);
+          log("   \u2713 removed");
+        }
       }
     } catch {
       log(`   \u2717 could not update ${rc} \u2014 remove the miserly launcher block manually`);
@@ -122,5 +128,5 @@ log(`5. Finish by hand:
      http://localhost:5173 in your browser to remove them.
 
 Nothing else is installed anywhere on your system — miserly has no global npm
-packages, daemons, or launch agents.${DRY ? "\n\nRun without --dry-run to apply steps 2–3." : ""}
+packages, daemons, or launch agents.${DRY ? "\n\nRun without --dry-run to apply steps 2–4." : ""}
 `);
